@@ -1,0 +1,46 @@
+{
+  "name": "vennplus",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Publication-ready interactive Venn, Euler, and UpSet diagrams for scientific set analysis.",
+  "author": {
+    "name": "xiaoli",
+    "email": "xiaoli@example.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XiaoLi1991-star/vennplus.git"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@upsetjs/venn.js": "^2.0.0",
+    "d3-scale": "^4.0.2",
+    "jspdf": "^4.2.1",
+    "lucide-react": "^1.28.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "svg2pdf.js": "^2.7.0",
+    "utif": "^3.1.0",
+    "write-excel-file": "^4.1.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/d3-scale": "^4.0.9",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^6.0.5",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10"
+  }
+}
