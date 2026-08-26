@@ -1,4 +1,4 @@
-import { forwardRef, useMemo } from 'react';
+import { forwardRef, useId, useMemo } from 'react';
 import { layout, type ICircle, type ISetOverlap } from '@upsetjs/venn.js';
 import type {
   DisplayOptions,
@@ -26,6 +26,7 @@ import { DraggableSetLabel } from './DraggableSetLabel';
 interface EulerChartProps {
   sets: SetDefinition[];
   analysis: SetAnalysis;
+  selectedMask?: number | null;
   display: DisplayOptions;
   figureStyle: FigureStyleOptions;
   labelPositions: SetLabelPositions;
@@ -44,6 +45,7 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
   {
     sets,
     analysis,
+    selectedMask = null,
     display,
     figureStyle,
     labelPositions,
@@ -53,6 +55,7 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
   },
   ref,
 ) {
+  const selectionId = `euler-selection-${useId().replace(/:/g, '')}`;
   const letters = sets.map((_, index) => String.fromCharCode(65 + index));
   const layoutItems = useMemo(() => {
     const data: EulerDatum[] = [];
@@ -144,6 +147,18 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
         : new Map<number, { x: number; y: number; clearance: number }>(),
     [circles, sets.length],
   );
+  const activeSelectedMask =
+    selectedMask && (analysis.regionByMask.get(selectedMask)?.count ?? 0) > 0
+      ? selectedMask
+      : null;
+  const selectedLayoutItem = activeSelectedMask
+    ? layoutItems.find((item) => item.data.mask === activeSelectedMask)
+    : undefined;
+  const selectedSpatialPath =
+    selectedLayoutItem && (sets.length < 4 || exactRegionAnchors.has(selectedLayoutItem.data.mask))
+      ? selectedLayoutItem.distinctPath || selectedLayoutItem.path
+      : '';
+  const selectionMaskId = `${selectionId}-outside`;
   const spatialRegionLabels = regionLabelItems.filter(
     ({ item }) => sets.length < 4 || exactRegionAnchors.has(item.data.mask),
   );
@@ -205,6 +220,29 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
         fill="#ffffff"
       />
 
+      {selectedSpatialPath ? (
+        <defs data-export-ignore="true">
+          <mask
+            id={selectionMaskId}
+            x={figureViewBox[0]}
+            y={figureViewBox[1]}
+            width={figureViewBox[2]}
+            height={figureViewBox[3]}
+            maskUnits="userSpaceOnUse"
+            maskContentUnits="userSpaceOnUse"
+          >
+            <rect
+              x={figureViewBox[0]}
+              y={figureViewBox[1]}
+              width={figureViewBox[2]}
+              height={figureViewBox[3]}
+              fill="#ffffff"
+            />
+            <path d={selectedSpatialPath} fill="#000000" fillRule="evenodd" />
+          </mask>
+        </defs>
+      ) : null}
+
       <g aria-hidden="true">
         {circles.map((circle, index) => (
           <circle
@@ -222,11 +260,26 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
         ))}
       </g>
 
+      {selectedSpatialPath ? (
+        <rect
+          data-export-ignore="true"
+          data-selection-veil="true"
+          aria-hidden="true"
+          className="region-selection-veil"
+          x={figureViewBox[0]}
+          y={figureViewBox[1]}
+          width={figureViewBox[2]}
+          height={figureViewBox[3]}
+          mask={`url(#${selectionMaskId})`}
+        />
+      ) : null}
+
       <g className="euler-hit-layer" data-export-ignore="true">
         {layoutItems.map((item) =>
           item.data.exactSize > 0 ? (
             <path
               key={`hit-${item.data.mask}`}
+              data-region-interaction="true"
               d={item.distinctPath || item.path}
               fill="transparent"
               fillRule="evenodd"
@@ -239,9 +292,11 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
       <g className="euler-region-labels">
         {spatialRegionLabels.map(({ item, lines }) => {
           const labelPoint = exactRegionAnchors.get(item.data.mask) ?? item.text;
+          const isSelected = item.data.mask === activeSelectedMask;
           return (
             <text
               key={item.data.mask}
+              data-region-interaction="true"
               x={labelPoint.x}
               y={labelPoint.y - (lines.length - 1) * regionFontSize * 0.58}
               textAnchor="middle"
@@ -251,8 +306,12 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
               fontSize={regionFontSize}
               fontWeight={figureStyle.regionLabelsBold ? 700 : 400}
               style={{ fontVariantNumeric: 'tabular-nums' }}
+              className={
+                isSelected ? 'region-is-selected' : activeSelectedMask ? 'region-is-muted' : undefined
+              }
               role="button"
               aria-label={`${analysis.regionByMask.get(item.data.mask)?.key ?? item.data.sets.join(' ∩ ')}，${item.data.exactSize} 个成员`}
+              aria-pressed={isSelected}
               tabIndex={0}
               onClick={() => onSelectRegion(item.data.mask)}
               onKeyDown={(event) => {
@@ -313,12 +372,18 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
             );
             const y = separateListY + separateLabelFontSize * 2.35 + index * separateLabelGap;
             const regionKey = analysis.regionByMask.get(item.data.mask)?.key ?? key;
+            const isSelected = item.data.mask === activeSelectedMask;
             return (
               <g
                 key={`separate-${item.data.mask}`}
+                data-region-interaction="true"
                 role="button"
                 tabIndex={0}
                 aria-label={`${regionKey}，${item.data.exactSize} 个成员`}
+                aria-pressed={isSelected}
+                className={
+                  isSelected ? 'region-is-selected' : activeSelectedMask ? 'region-is-muted' : undefined
+                }
                 onClick={() => onSelectRegion(item.data.mask)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
@@ -354,6 +419,7 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
                   ))}
                 </text>
                 <text
+                  className="euler-separate-region-value"
                   x={separateListX + separateListWidth}
                   y={y + keyFontSize * 0.77}
                   textAnchor="end"

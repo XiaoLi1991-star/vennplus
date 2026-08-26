@@ -1,4 +1,4 @@
-import { forwardRef, useMemo } from 'react';
+import { forwardRef, useId, useMemo, type ReactNode } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type {
   DisplayOptions,
@@ -31,10 +31,12 @@ import { DraggableSetLabel } from './DraggableSetLabel';
 interface VennChartProps {
   sets: SetDefinition[];
   analysis: SetAnalysis;
+  selectedMask?: number | null;
   display: DisplayOptions;
   figureStyle: FigureStyleOptions;
   labelPositions: SetLabelPositions;
   onSelectRegion: (mask: number) => void;
+  onClearSelection?: () => void;
   onSetLabelPositionChange: (setId: string, position: { x: number; y: number }) => void;
   targetAspectRatio?: number;
 }
@@ -54,15 +56,18 @@ export const VennChart = forwardRef<SVGSVGElement, VennChartProps>(function Venn
   {
     sets,
     analysis,
+    selectedMask = null,
     display,
     figureStyle,
     labelPositions,
     onSelectRegion,
+    onClearSelection = () => undefined,
     onSetLabelPositionChange,
     targetAspectRatio,
   },
   ref,
 ) {
+  const selectionId = `venn-selection-${useId().replace(/:/g, '')}`;
   const template = getVennTemplate(sets.length);
   const labelPoints = useMemo(() => findLabelPointsBySampling(template), [template]);
   const labelFontSize = Number(
@@ -117,12 +122,52 @@ export const VennChart = forwardRef<SVGSVGElement, VennChartProps>(function Venn
   // Do not silently drop labels: complete region accounting is more important
   // than heuristic label suppression in a publication figure.
   const renderedRegionLabels = regionLabelItems;
+  const activeSelectedMask =
+    selectedMask && (analysis.regionByMask.get(selectedMask)?.count ?? 0) > 0
+      ? selectedMask
+      : null;
+  const selectedSetIndices = activeSelectedMask
+    ? maskToIndices(activeSelectedMask, sets.length)
+    : [];
+  const excludedSetIndices = activeSelectedMask
+    ? sets.map((_, index) => index).filter((index) => !(activeSelectedMask & (1 << index)))
+    : [];
+  const selectionMaskId = `${selectionId}-outside`;
+
+  const renderMaskShape = (index: number, fill: string, key: string) => {
+    const shape = template.shapes[index];
+    return shape.kind === 'contour' ? (
+      <path key={key} d={contourPath(shape)} fill={fill} />
+    ) : (
+      <ellipse
+        key={key}
+        cx={shape.cx}
+        cy={shape.cy}
+        rx={shape.rx}
+        ry={shape.ry}
+        transform={ellipseTransform(shape)}
+        fill={fill}
+      />
+    );
+  };
+
+  const wrapWithSelectedSetClips = (content: ReactNode) =>
+    selectedSetIndices.reduce<ReactNode>(
+      (child, index) => (
+        <g key={`selected-clip-${index}`} clipPath={`url(#${selectionId}-clip-${index})`}>
+          {child}
+        </g>
+      ),
+      content,
+    );
 
   const selectAtPoint = (event: ReactPointerEvent<SVGRectElement>) => {
     const point = eventToSvgPoint(event);
     if (!point) return;
     const mask = pointToMask(point.x, point.y, template.shapes);
     if ((analysis.regionByMask.get(mask)?.count ?? 0) > 0) onSelectRegion(mask);
+    else onClearSelection();
+    event.stopPropagation();
   };
 
   return (
@@ -154,6 +199,51 @@ export const VennChart = forwardRef<SVGSVGElement, VennChartProps>(function Venn
         fill="#ffffff"
       />
 
+      {activeSelectedMask ? (
+        <defs data-export-ignore="true">
+          {selectedSetIndices.map((index) => (
+            <clipPath
+              key={`clip-${index}`}
+              id={`${selectionId}-clip-${index}`}
+              clipPathUnits="userSpaceOnUse"
+            >
+              {renderMaskShape(index, '#ffffff', `clip-shape-${index}`)}
+            </clipPath>
+          ))}
+          <mask
+            id={selectionMaskId}
+            x={figureViewBox[0]}
+            y={figureViewBox[1]}
+            width={figureViewBox[2]}
+            height={figureViewBox[3]}
+            maskUnits="userSpaceOnUse"
+            maskContentUnits="userSpaceOnUse"
+          >
+            <rect
+              x={figureViewBox[0]}
+              y={figureViewBox[1]}
+              width={figureViewBox[2]}
+              height={figureViewBox[3]}
+              fill="#ffffff"
+            />
+            {wrapWithSelectedSetClips(
+              <g>
+                <rect
+                  x={figureViewBox[0]}
+                  y={figureViewBox[1]}
+                  width={figureViewBox[2]}
+                  height={figureViewBox[3]}
+                  fill="#000000"
+                />
+                {excludedSetIndices.map((index) =>
+                  renderMaskShape(index, '#ffffff', `excluded-shape-${index}`),
+                )}
+              </g>,
+            )}
+          </mask>
+        </defs>
+      ) : null}
+
       <g aria-hidden="true" className="venn-set-layer">
         {template.shapes.map((shape, index) => {
           const commonProps = {
@@ -180,6 +270,20 @@ export const VennChart = forwardRef<SVGSVGElement, VennChartProps>(function Venn
         })}
       </g>
 
+      {activeSelectedMask ? (
+        <rect
+          data-export-ignore="true"
+          data-selection-veil="true"
+          aria-hidden="true"
+          className="region-selection-veil"
+          x={figureViewBox[0]}
+          y={figureViewBox[1]}
+          width={figureViewBox[2]}
+          height={figureViewBox[3]}
+          mask={`url(#${selectionMaskId})`}
+        />
+      ) : null}
+
       <rect
         data-export-ignore="true"
         x={figureViewBox[0]}
@@ -193,13 +297,21 @@ export const VennChart = forwardRef<SVGSVGElement, VennChartProps>(function Venn
 
       <g className="venn-region-labels">
         {renderedRegionLabels.map(({ region, labelPoint, lines }) => {
+          const isSelected = region.mask === activeSelectedMask;
           return (
             <g
               key={region.mask}
+              data-region-interaction="true"
               role={region.count > 0 ? 'button' : undefined}
               tabIndex={region.count > 0 ? 0 : -1}
               aria-label={`${region.key}，${region.count} 个成员`}
-              className="venn-region-label"
+              aria-pressed={region.count > 0 ? isSelected : undefined}
+              className={[
+                'venn-region-label',
+                isSelected ? 'region-is-selected' : activeSelectedMask ? 'region-is-muted' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               onClick={() => region.count > 0 && onSelectRegion(region.mask)}
               onKeyDown={(event) => {
                 if (region.count > 0 && (event.key === 'Enter' || event.key === ' ')) {

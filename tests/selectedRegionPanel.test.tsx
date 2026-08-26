@@ -19,6 +19,7 @@ describe('selected intersection member panel', () => {
     render(
       <SelectedRegionPanel
         region={region}
+        onClearSelection={() => undefined}
         onDownloadTxt={() => undefined}
         onDownloadCsv={() => undefined}
       />,
@@ -38,6 +39,7 @@ describe('selected intersection member panel', () => {
     render(
       <SelectedRegionPanel
         region={region}
+        onClearSelection={() => undefined}
         onDownloadTxt={onDownloadTxt}
         onDownloadCsv={onDownloadCsv}
       />,
@@ -53,6 +55,7 @@ describe('selected intersection member panel', () => {
     render(
       <SelectedRegionPanel
         region={region}
+        onClearSelection={() => undefined}
         onDownloadTxt={() => undefined}
         onDownloadCsv={() => undefined}
       />,
@@ -72,6 +75,7 @@ describe('selected intersection member panel', () => {
     const { rerender } = render(
       <SelectedRegionPanel
         region={region}
+        onClearSelection={() => undefined}
         onDownloadTxt={() => undefined}
         onDownloadCsv={() => undefined}
       />,
@@ -83,6 +87,7 @@ describe('selected intersection member panel', () => {
     rerender(
       <SelectedRegionPanel
         region={{ ...region, key: 'Discovery ∩ Validation ∩ Curated', members: ['BRCA1'] }}
+        onClearSelection={() => undefined}
         onDownloadTxt={() => undefined}
         onDownloadCsv={() => undefined}
       />,
@@ -90,5 +95,21 @@ describe('selected intersection member panel', () => {
 
     expect(screen.getByLabelText('搜索选中区域成员')).toHaveValue('');
     expect(screen.getByLabelText('选中区域成员文本')).toHaveValue('BRCA1');
+  });
+
+  it('offers an explicit way to clear the selected intersection', () => {
+    const onClearSelection = vi.fn();
+    render(
+      <SelectedRegionPanel
+        region={region}
+        onClearSelection={onClearSelection}
+        onDownloadTxt={() => undefined}
+        onDownloadCsv={() => undefined}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '取消选择' }));
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/点击画布空白处可取消选择/)).toBeInTheDocument();
   });
 });

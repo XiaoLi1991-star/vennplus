@@ -33,6 +33,7 @@ interface FigurePanelProps {
   isPresentationPreview: boolean;
   onModeChange: (mode: ViewMode) => void;
   onSelectRegion: (mask: number) => void;
+  onClearSelection: () => void;
   onSetLabelPositionChange: (setId: string, position: { x: number; y: number }) => void;
   onToggleInput: () => void;
   onToggleInspector: () => void;
@@ -59,6 +60,7 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
     isPresentationPreview,
     onModeChange,
     onSelectRegion,
+    onClearSelection,
     onSetLabelPositionChange,
     onToggleInput,
     onToggleInspector,
@@ -132,7 +134,17 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
             </div>
           ) : null}
         </div>
-        <div className="figure-stage">
+        <div
+          className="figure-stage"
+          onClick={(event) => {
+            const target = event.target;
+            if (
+              target instanceof Element &&
+              target.closest('[data-region-interaction="true"], .draggable-set-label')
+            ) return;
+            onClearSelection();
+          }}
+        >
           {mode === 'venn' || mode === 'euler' ? (
             <div
               className="figure-canvas"
@@ -143,11 +155,13 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
                   ref={ref}
                   sets={sets}
                   analysis={analysis}
+                  selectedMask={selectedRegion?.mask ?? null}
                   display={display}
                   figureStyle={figureStyle}
                   labelPositions={labelPositions}
                   targetAspectRatio={targetAspectRatio}
                   onSelectRegion={onSelectRegion}
+                  onClearSelection={onClearSelection}
                   onSetLabelPositionChange={onSetLabelPositionChange}
                 />
               ) : (
@@ -155,6 +169,7 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
                   ref={ref}
                   sets={sets}
                   analysis={analysis}
+                  selectedMask={selectedRegion?.mask ?? null}
                   display={display}
                   figureStyle={figureStyle}
                   labelPositions={labelPositions}
@@ -180,6 +195,7 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
       </div>
       <SelectedRegionPanel
         region={selectedRegion}
+        onClearSelection={onClearSelection}
         onDownloadTxt={onDownloadRegionTxt}
         onDownloadCsv={onDownloadRegionCsv}
       />

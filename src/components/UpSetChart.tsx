@@ -46,8 +46,6 @@ interface SetLaneProps {
 
 const BASE_BAR_TOP = 64;
 const BAR_BOTTOM = 190;
-const MATRIX_TOP = 240;
-const MATRIX_BOTTOM = 360;
 const HORIZONTAL_VALUE_LABEL_GAP = 20;
 const ANGLED_VALUE_LABEL_GAP = 22;
 const VALUE_LINE_HEIGHT = 11.5;
@@ -56,7 +54,6 @@ const ANGLED_VALUE_LABEL_DEGREES = -75;
 const VALUE_LABEL_SAFE_TOP = 28;
 const INTERSECTION_TITLE_Y = 20;
 const SET_SIZE_TITLE_Y = 218;
-const NOTE_Y = 405;
 
 function scaledFontSize(base: number, scale: number): number {
   return Number((base * scale).toFixed(2));
@@ -159,19 +156,34 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
       createUpSetLayout(setNames, visibleRegions.length, setCounts, {
         labelScale: figureStyle.upsetLabelFontScale,
         valueScale: figureStyle.upsetValueFontScale,
+        columnScale: figureStyle.upsetColumnScale,
+        rowScale: figureStyle.upsetRowScale,
       }),
     [
+      figureStyle.upsetColumnScale,
       figureStyle.upsetLabelFontScale,
+      figureStyle.upsetRowScale,
       figureStyle.upsetValueFontScale,
       setCounts,
       setNames,
       visibleRegions.length,
     ],
   );
-  const { width, height, plotLeft, plotRight, columnStep, isDense, minViewportWidth, setNameX } =
-    layout;
+  const {
+    width,
+    height,
+    plotLeft,
+    plotRight,
+    columnStep,
+    matrixTop,
+    matrixBottom,
+    rowStep,
+    noteY,
+    isDense,
+    minViewportWidth,
+    setNameX,
+  } = layout;
   const barWidth = Math.max(8, Math.min(27, columnStep * 0.62));
-  const rowStep = sets.length > 1 ? (MATRIX_BOTTOM - MATRIX_TOP) / (sets.length - 1) : 0;
   const maxRegion = Math.max(1, ...visibleRegions.map((region) => region.count));
   const maxSet = Math.max(1, ...setCounts);
   const valueLabelLines = visibleRegions.map((region) =>
@@ -289,11 +301,16 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
           ref={assignChartRef}
           className="scientific-figure upset-figure"
           viewBox={figureViewBox.join(' ')}
-          preserveAspectRatio="xMinYMid meet"
+          preserveAspectRatio={isDense ? 'xMinYMid meet' : 'xMidYMid meet'}
           role="img"
           aria-labelledby="upset-title upset-description"
           data-figure="upset"
           data-column-step={columnStep}
+          data-column-scale={figureStyle.upsetColumnScale}
+          data-row-step={rowStep}
+          data-row-scale={figureStyle.upsetRowScale}
+          data-matrix-top={matrixTop}
+          data-matrix-bottom={matrixBottom}
           data-set-name-gap={layout.setNameGap}
           data-set-count-x={UPSET_SET_COUNT_X}
           data-set-name-x={setNameX}
@@ -302,7 +319,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
           data-value-label-gap={valueLabelGap}
           data-value-label-layout={denseLabelsAreAngled ? 'angled' : 'horizontal'}
           data-export-content-top={Math.max(0, INTERSECTION_TITLE_Y - axisTitleFontSize)}
-          data-export-content-bottom={MATRIX_BOTTOM + 8}
+          data-export-content-bottom={matrixBottom + 8}
           style={minViewportWidth ? { minWidth: `${minViewportWidth}px` } : undefined}
         >
           <title id="upset-title">{sets.length}-set UpSet plot</title>
@@ -382,6 +399,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
               return (
                 <g
                   key={region.mask}
+                  data-region-interaction="true"
                   role={region.count > 0 ? 'button' : undefined}
                   tabIndex={region.count > 0 ? 0 : -1}
                   aria-label={`${region.key}，${region.count} 个成员`}
@@ -442,7 +460,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
                     x={x - columnStep / 2}
                     y={barTop}
                     width={columnStep}
-                    height={MATRIX_BOTTOM - barTop + 16}
+                    height={matrixBottom - barTop + 16}
                     fill="transparent"
                   />
                 </g>
@@ -455,7 +473,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
             setNames={setNames}
             setCounts={setCounts}
             setNameX={setNameX}
-            matrixTop={MATRIX_TOP}
+            matrixTop={matrixTop}
             rowStep={rowStep}
             setScale={setScale}
             labelFontSize={labelFontSize}
@@ -475,8 +493,8 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
                   key={`connector-${region.mask}`}
                   x1={x}
                   x2={x}
-                  y1={MATRIX_TOP + rowStep * first}
-                  y2={MATRIX_TOP + rowStep * last}
+                  y1={matrixTop + rowStep * first}
+                  y2={matrixTop + rowStep * last}
                   stroke="#5b666d"
                   strokeWidth={1.15}
                   vectorEffect="non-scaling-stroke"
@@ -485,7 +503,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
             })}
 
             {sets.map((set, rowIndex) => {
-              const y = MATRIX_TOP + rowStep * rowIndex;
+              const y = matrixTop + rowStep * rowIndex;
               return visibleRegions.map((region, columnIndex) => {
                 const x = plotLeft + columnStep * columnIndex + columnStep / 2;
                 const active = (region.mask & (1 << rowIndex)) !== 0;
@@ -504,7 +522,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
 
           <text
             x={plotLeft}
-            y={NOTE_Y}
+            y={noteY}
             className="upset-note"
             data-export-ignore="true"
             style={{ fontSize: noteFontSize, fontWeight: labelFontWeight }}
@@ -574,7 +592,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
           setNames={setNames}
           setCounts={setCounts}
           setNameX={setNameX}
-          matrixTop={MATRIX_TOP}
+          matrixTop={matrixTop}
           rowStep={rowStep}
           setScale={setScale}
           labelFontSize={labelFontSize}
@@ -582,7 +600,13 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
           valueFontSize={setCountFontSize}
           valueFontWeight={valueFontWeight}
         />
-        <line className="upset-frozen-divider" x1={plotLeft - 1} x2={plotLeft - 1} y1={28} y2={405} />
+        <line
+          className="upset-frozen-divider"
+          x1={plotLeft - 1}
+          x2={plotLeft - 1}
+          y1={28}
+          y2={noteY}
+        />
       </svg>
     </div>
   );

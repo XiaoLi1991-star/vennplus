@@ -28,6 +28,7 @@ describe('vector figure export', () => {
         ref={ref}
         sets={sets}
         analysis={analysis}
+        selectedMask={15}
         display={{ regionLabelMode: 'count', showSetNames: true, showEmpty: false }}
         figureStyle={DEFAULT_FIGURE_STYLE}
         labelPositions={{}}
@@ -36,11 +37,18 @@ describe('vector figure export', () => {
       />,
     );
 
+    expect(ref.current?.querySelector('[data-selection-veil="true"]')).toBeInTheDocument();
+    expect(ref.current?.querySelector('[aria-pressed="true"]')).toBeInTheDocument();
+
     const exported = serializeFigureSvg(ref.current!);
     expect(exported.markup.match(/<ellipse/g)).toHaveLength(4);
     expect(exported.markup).not.toContain('data-export-ignore');
     expect(exported.markup).not.toContain('tabindex');
     expect(exported.markup).not.toContain('role="button"');
+    expect(exported.markup).not.toContain('aria-pressed');
+    expect(exported.markup).not.toContain('data-selection-veil');
+    expect(exported.markup).not.toContain('region-is-selected');
+    expect(exported.markup).not.toContain('region-is-muted');
     expect(exported.markup).toContain('vector-effect="non-scaling-stroke"');
     expect(exported.markup).toContain('width="180mm"');
     expect(exported.markup).toContain('"intersections":"exact"');
@@ -149,6 +157,43 @@ describe('vector figure export', () => {
       ),
     );
     expect(matrixBottom / exportedViewBox![3]).toBeGreaterThan(0.85);
+  });
+
+  it('preserves compact three-set column spacing and centers it on the export canvas', () => {
+    const sets = EXAMPLES.find((example) => example.id === 'three-treatments')!.sets.map((set) => ({
+      ...set,
+    }));
+    const analysis = analyzeSets(sets);
+    const ref = createRef<SVGSVGElement>();
+    render(
+      <UpSetChart
+        ref={ref}
+        sets={sets}
+        analysis={analysis}
+        display={{ regionLabelMode: 'count', showSetNames: true, showEmpty: false }}
+        figureStyle={{
+          ...DEFAULT_FIGURE_STYLE,
+          upsetColumnScale: 0.75,
+          upsetRowScale: 1.5,
+        }}
+        topN={20}
+        sort="size"
+        onSelectRegion={() => undefined}
+      />,
+    );
+
+    expect(ref.current).toHaveAttribute('data-column-step', '27');
+    const sourceViewBox = ref.current!.getAttribute('viewBox')!.split(/\s+/).map(Number);
+    const exported = serializeFigureSvg(ref.current!);
+    const exportedViewBox = exported.markup.match(/viewBox="([^"]+)"/)?.[1].split(/\s+/).map(Number);
+
+    expect(exported.markup).toContain('data-column-scale="0.75"');
+    expect(exported.markup).toContain('data-column-step="27"');
+    expect(exported.markup).toContain('data-row-scale="1.5"');
+    expect(exported.markup).toContain('data-row-step="42"');
+    expect(exportedViewBox).toHaveLength(4);
+    expect(exportedViewBox![0]).toBeLessThan(sourceViewBox[0]);
+    expect(exportedViewBox![2] / exportedViewBox![3]).toBeCloseTo(1.5, 6);
   });
 });
 

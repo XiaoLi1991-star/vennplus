@@ -768,6 +768,48 @@ input:disabled {
   cursor: pointer;
 }
 
+.region-selection-veil {
+  fill: #fff;
+  fill-opacity: 0.46;
+  pointer-events: none;
+}
+
+.venn-region-label,
+.euler-region-labels [role='button'],
+.euler-separate-region-labels [role='button'] {
+  transition: opacity 150ms ease;
+}
+
+.venn-region-label.region-is-muted,
+.euler-region-labels .region-is-muted,
+.euler-separate-region-labels .region-is-muted {
+  opacity: 0.38;
+}
+
+.venn-region-label.region-is-selected text,
+.euler-region-labels .region-is-selected,
+.euler-separate-region-labels .region-is-selected .euler-separate-region-value {
+  fill: #1f3038;
+  text-decoration: underline;
+  text-decoration-color: #617782;
+  text-decoration-thickness: 0.07em;
+  text-underline-offset: 0.28em;
+}
+
+.scientific-figure [role='button']:focus {
+  outline: none;
+}
+
+.venn-region-label:focus-visible text,
+.euler-region-labels [role='button']:focus-visible,
+.euler-separate-region-labels [role='button']:focus-visible .euler-separate-region-value {
+  fill: #223c48;
+  text-decoration: underline;
+  text-decoration-color: #456f9d;
+  text-decoration-thickness: 0.1em;
+  text-underline-offset: 0.28em;
+}
+
 .draggable-set-label {
   cursor: grab;
   touch-action: none;
@@ -796,8 +838,6 @@ input:disabled {
   outline: none;
 }
 
-.venn-region-label:focus-visible text,
-.euler-region-labels text:focus-visible,
 .upset-bars > g:focus-visible {
   outline: none;
 }
@@ -1022,6 +1062,19 @@ input:disabled {
   gap: 6px;
   color: #6b797f;
   font-size: 10.5px;
+}
+
+.upset-options .slider-control {
+  display: grid;
+  grid-template-columns: auto minmax(62px, 1fr) 43px;
+  min-width: 178px;
+}
+
+.upset-spacing-note {
+  max-width: 142px;
+  color: #879298;
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .upset-options select {
@@ -1792,6 +1845,15 @@ input:disabled {
   gap: 9px;
 }
 
+.inspector-panel .upset-options .slider-control {
+  min-width: 0;
+}
+
+.inspector-panel .upset-spacing-note {
+  max-width: none;
+  margin-top: -5px;
+}
+
 .inspector-panel .palette-select-wrap {
   height: 38px;
 }
@@ -1853,12 +1915,36 @@ input:disabled {
 
 .selected-region-title-row strong {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: #2c3b43;
   font-size: 13px;
   font-weight: 680;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.selected-region-clear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  padding: 0;
+  color: #75848b;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.selected-region-clear-button:hover,
+.selected-region-clear-button:focus-visible {
+  color: #315f84;
+  background: #f3f7f9;
+  border-color: #c8d5dc;
+  outline: none;
 }
 
 .selected-region-title-row > span {

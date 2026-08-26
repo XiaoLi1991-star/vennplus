@@ -16,6 +16,7 @@ import {
   MAX_VENN_SET_COUNT,
   MIN_SET_COUNT,
 } from '../data/limits';
+import { UPSET_MAX_COLUMN_SCALE, UPSET_MAX_ROW_SCALE } from './upsetLayout';
 
 const DATABASE_NAME = 'vennplus-workspace';
 const DATABASE_VERSION = 1;
@@ -116,6 +117,8 @@ function normalizeFigureStyle(value: unknown): FigureStyleOptions {
     upsetLabelsBold: value.upsetLabelsBold === true,
     upsetValueFontScale: normalizeScale(value.upsetValueFontScale, 1, 1.4),
     upsetValuesBold: value.upsetValuesBold === true,
+    upsetColumnScale: normalizeScale(value.upsetColumnScale, 1, UPSET_MAX_COLUMN_SCALE),
+    upsetRowScale: normalizeScale(value.upsetRowScale, 1, UPSET_MAX_ROW_SCALE),
   };
 }
 
@@ -168,7 +171,7 @@ export function normalizeWorkspaceState(value: unknown): WorkspaceState {
       euler: normalizeLabelPositions(rawPositions.euler),
     },
     paletteId: typeof value.paletteId === 'string' ? value.paletteId : 'ggvenn-soft',
-    selectedMask: Number.isInteger(value.selectedMask) ? Math.max(1, Number(value.selectedMask)) : 1,
+    selectedMask: Number.isInteger(value.selectedMask) ? Math.max(0, Number(value.selectedMask)) : 1,
     topN,
     sort,
     publication: normalizePublication(value.publication),

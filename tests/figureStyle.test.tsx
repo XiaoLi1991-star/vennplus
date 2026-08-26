@@ -18,6 +18,38 @@ const display = {
 };
 
 describe('figure paint rules', () => {
+  ['two-cohorts', 'three-treatments', 'four-biomarkers', 'five-pathways'].forEach(
+    (exampleId) => {
+      it(`renders an exact-region selection veil for ${exampleId}`, () => {
+        const example = EXAMPLES.find((item) => item.id === exampleId)!;
+        const exampleSets = cloneExample(example);
+        const exampleAnalysis = analyzeSets(exampleSets);
+        const selectedRegion = exampleAnalysis.regions
+          .filter((region) => region.count > 0)
+          .sort((a, b) => b.setIndices.length - a.setIndices.length || b.count - a.count)[0];
+        const { container } = render(
+          <VennChart
+            sets={exampleSets}
+            analysis={exampleAnalysis}
+            selectedMask={selectedRegion.mask}
+            display={display}
+            figureStyle={DEFAULT_FIGURE_STYLE}
+            labelPositions={{}}
+            onSelectRegion={() => undefined}
+            onSetLabelPositionChange={() => undefined}
+          />,
+        );
+
+        expect(container.querySelector('[data-selection-veil="true"]')).toBeInTheDocument();
+        expect(container.querySelector('[aria-pressed="true"]')).toHaveAttribute(
+          'aria-label',
+          `${selectedRegion.key}，${selectedRegion.count} 个成员`,
+        );
+        expect(container.querySelector('.venn-region-label.region-is-muted')).toBeInTheDocument();
+      });
+    },
+  );
+
   it('uses a custom edge only while a visible fill is active', () => {
     const custom = {
       ...DEFAULT_FIGURE_STYLE,

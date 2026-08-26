@@ -52,6 +52,8 @@ export interface FigureStyleOptions {
   upsetLabelsBold: boolean;
   upsetValueFontScale: number;
   upsetValuesBold: boolean;
+  upsetColumnScale: number;
+  upsetRowScale: number;
 }
 
 export interface PublicationSettings {

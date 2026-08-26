@@ -1,6 +1,12 @@
 import { hasFigureFill } from '../data/figureStyle';
 import { RotateCcw } from 'lucide-react';
 import type { PalettePreset } from '../data/palettes';
+import {
+  UPSET_MAX_COLUMN_SCALE,
+  UPSET_MAX_ROW_SCALE,
+  UPSET_MIN_COLUMN_SCALE,
+  UPSET_MIN_ROW_SCALE,
+} from '../lib/upsetLayout';
 import type { DisplayOptions, FigureStyleOptions, ViewMode } from '../types';
 import type { UpSetSort } from './UpSetChart';
 
@@ -235,6 +241,26 @@ export function FigureControls({
 
         {mode === 'upset' ? (
           <div className="control-group upset-options">
+            <span className="control-group-label">布局</span>
+            <SliderControl
+              label="交集列距"
+              value={figureStyle.upsetColumnScale}
+              min={UPSET_MIN_COLUMN_SCALE}
+              max={UPSET_MAX_COLUMN_SCALE}
+              step={0.05}
+              output={`${Math.round(figureStyle.upsetColumnScale * 100)}%`}
+              onChange={(upsetColumnScale) => onFigureStyleChange({ upsetColumnScale })}
+            />
+            <SliderControl
+              label="集合行距"
+              value={figureStyle.upsetRowScale}
+              min={UPSET_MIN_ROW_SCALE}
+              max={UPSET_MAX_ROW_SCALE}
+              step={0.05}
+              output={`${Math.round(figureStyle.upsetRowScale * 100)}%`}
+              onChange={(upsetRowScale) => onFigureStyleChange({ upsetRowScale })}
+            />
+            <small className="upset-spacing-note">仅调整矩阵疏密，不改变统计值</small>
             <label>
               <span>排序</span>
               <select value={sort} onChange={(event) => onSortChange(event.target.value as UpSetSort)}>

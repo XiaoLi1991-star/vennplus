@@ -14,6 +14,133 @@ const display = {
 };
 
 describe('UpSet chart responsive density', () => {
+  it('renders the seven observed intersections of a three-set example with compact columns', () => {
+    const threeSets = EXAMPLES.find((example) => example.id === 'three-treatments')!.sets.map(
+      (set) => ({ ...set }),
+    );
+    const threeAnalysis = analyzeSets(threeSets);
+    const { container } = render(
+      <UpSetChart
+        sets={threeSets}
+        analysis={threeAnalysis}
+        display={display}
+        figureStyle={DEFAULT_FIGURE_STYLE}
+        topN={20}
+        sort="size"
+        onSelectRegion={() => undefined}
+      />,
+    );
+
+    const chart = container.querySelector('svg.upset-figure')!;
+    const viewBox = chart.getAttribute('viewBox')!.split(/\s+/).map(Number);
+    expect(container.querySelectorAll('.upset-bars > g')).toHaveLength(7);
+    expect(Number(chart.getAttribute('data-column-step'))).toBe(36);
+    expect(viewBox[2]).toBeLessThan(600);
+    expect(chart).toHaveAttribute('data-column-scale', '1');
+    expect(chart).toHaveAttribute('data-row-scale', '1');
+    expect(chart).toHaveAttribute('data-row-step', '28');
+    expect(chart).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet');
+  });
+
+  it('changes horizontal spacing without changing bar heights or values', () => {
+    const threeSets = EXAMPLES.find((example) => example.id === 'three-treatments')!.sets.map(
+      (set) => ({ ...set }),
+    );
+    const threeAnalysis = analyzeSets(threeSets);
+    const compact = render(
+      <UpSetChart
+        sets={threeSets}
+        analysis={threeAnalysis}
+        display={display}
+        figureStyle={{ ...DEFAULT_FIGURE_STYLE, upsetColumnScale: 0.75 }}
+        topN={20}
+        sort="size"
+        onSelectRegion={() => undefined}
+      />,
+    );
+    const compactChart = compact.container.querySelector('svg.upset-figure')!;
+    const compactBars = [...compact.container.querySelectorAll<SVGRectElement>('.upset-intersection-bar')];
+    const compactHeights = compactBars.map((bar) => bar.getAttribute('height'));
+    const compactValues = [...compact.container.querySelectorAll('.upset-value-label')].map(
+      (label) => label.textContent,
+    );
+    compact.unmount();
+
+    const spacious = render(
+      <UpSetChart
+        sets={threeSets}
+        analysis={threeAnalysis}
+        display={display}
+        figureStyle={{ ...DEFAULT_FIGURE_STYLE, upsetColumnScale: 1.5 }}
+        topN={20}
+        sort="size"
+        onSelectRegion={() => undefined}
+      />,
+    );
+    const spaciousChart = spacious.container.querySelector('svg.upset-figure')!;
+    const spaciousBars = [
+      ...spacious.container.querySelectorAll<SVGRectElement>('.upset-intersection-bar'),
+    ];
+
+    expect(Number(compactChart.getAttribute('data-column-step'))).toBe(27);
+    expect(Number(spaciousChart.getAttribute('data-column-step'))).toBe(54);
+    expect(spaciousBars.map((bar) => bar.getAttribute('height'))).toEqual(compactHeights);
+    expect([...spacious.container.querySelectorAll('.upset-value-label')].map(
+      (label) => label.textContent,
+    )).toEqual(compactValues);
+  });
+
+  it('changes matrix row spacing and canvas height without changing bars or values', () => {
+    const threeSets = EXAMPLES.find((example) => example.id === 'three-treatments')!.sets.map(
+      (set) => ({ ...set }),
+    );
+    const threeAnalysis = analyzeSets(threeSets);
+    const compact = render(
+      <UpSetChart
+        sets={threeSets}
+        analysis={threeAnalysis}
+        display={display}
+        figureStyle={{ ...DEFAULT_FIGURE_STYLE, upsetRowScale: 0.75 }}
+        topN={20}
+        sort="size"
+        onSelectRegion={() => undefined}
+      />,
+    );
+    const compactChart = compact.container.querySelector('svg.upset-figure')!;
+    const compactBarHeights = [
+      ...compact.container.querySelectorAll<SVGRectElement>('.upset-intersection-bar'),
+    ].map((bar) => bar.getAttribute('height'));
+    const compactValues = [...compact.container.querySelectorAll('.upset-value-label')].map(
+      (label) => label.textContent,
+    );
+    compact.unmount();
+
+    const spacious = render(
+      <UpSetChart
+        sets={threeSets}
+        analysis={threeAnalysis}
+        display={display}
+        figureStyle={{ ...DEFAULT_FIGURE_STYLE, upsetRowScale: 1.5 }}
+        topN={20}
+        sort="size"
+        onSelectRegion={() => undefined}
+      />,
+    );
+    const spaciousChart = spacious.container.querySelector('svg.upset-figure')!;
+    const spaciousBarHeights = [
+      ...spacious.container.querySelectorAll<SVGRectElement>('.upset-intersection-bar'),
+    ].map((bar) => bar.getAttribute('height'));
+
+    expect(compactChart).toHaveAttribute('data-row-step', '21');
+    expect(spaciousChart).toHaveAttribute('data-row-step', '42');
+    expect(compactChart.getAttribute('viewBox')?.split(/\s+/)[3]).toBe('352');
+    expect(spaciousChart.getAttribute('viewBox')?.split(/\s+/)[3]).toBe('394');
+    expect(spaciousBarHeights).toEqual(compactBarHeights);
+    expect([...spacious.container.querySelectorAll('.upset-value-label')].map(
+      (label) => label.textContent,
+    )).toEqual(compactValues);
+  });
+
   it('applies independent label and numeric typography without breaking lane spacing', () => {
     const figureStyle = {
       ...DEFAULT_FIGURE_STYLE,

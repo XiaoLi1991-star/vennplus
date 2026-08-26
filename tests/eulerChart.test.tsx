@@ -104,11 +104,12 @@ function expectDefaultSetLabelsOutsideEveryCircle(container: HTMLElement): void 
   });
 }
 
-function renderEuler(testSets: SetDefinition[]) {
+function renderEuler(testSets: SetDefinition[], selectedMask: number | null = null) {
   return render(
     <EulerChart
       sets={testSets}
       analysis={analyzeSets(testSets)}
+      selectedMask={selectedMask}
       display={{ regionLabelMode: 'count', showSetNames: true, showEmpty: false }}
       figureStyle={DEFAULT_FIGURE_STYLE}
       labelPositions={{}}
@@ -119,6 +120,16 @@ function renderEuler(testSets: SetDefinition[]) {
 }
 
 describe('Euler circle area encoding', () => {
+  it('marks the selected exact region and mutes the other interactive labels', () => {
+    const { container } = renderEuler(sets, 7);
+    const selected = container.querySelector('.euler-region-labels [aria-pressed="true"]');
+    const muted = container.querySelector('.euler-region-labels .region-is-muted');
+
+    expect(container.querySelector('[data-selection-veil="true"]')).toBeInTheDocument();
+    expect(selected).toHaveClass('region-is-selected');
+    expect(muted).toBeInTheDocument();
+  });
+
   it('keeps each rendered circle area proportional to its set size', () => {
     const { container } = renderEuler(sets);
 

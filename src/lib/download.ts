@@ -175,10 +175,14 @@ function createExportClone(
 ): SVGSVGElement {
   const clone = svg.cloneNode(true) as SVGSVGElement;
   clone.querySelectorAll('[data-export-ignore]').forEach((node) => node.remove());
-  clone.querySelectorAll('[role], [tabindex], [aria-label]').forEach((node) => {
+  clone.querySelectorAll('[role], [tabindex], [aria-label], [aria-pressed]').forEach((node) => {
     node.removeAttribute('role');
     node.removeAttribute('tabindex');
     node.removeAttribute('aria-label');
+    node.removeAttribute('aria-pressed');
+  });
+  clone.querySelectorAll('.region-is-selected, .region-is-muted').forEach((node) => {
+    node.classList.remove('region-is-selected', 'region-is-muted');
   });
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
@@ -188,7 +192,10 @@ function createExportClone(
   const fittedViewBox = fitViewBoxToAspectRatio(
     [sourceViewBox.x, sourceViewBox.y, sourceViewBox.width, sourceViewBox.height],
     publication.widthMm / publication.heightMm,
-    clone.getAttribute('data-figure') === 'upset' ? 'top-left' : 'center',
+    clone.getAttribute('data-figure') === 'upset' &&
+      clone.getAttribute('data-upset-scrollable') === 'true'
+      ? 'top-left'
+      : 'center',
   );
   clone.setAttribute('viewBox', fittedViewBox.join(' '));
   clone.querySelectorAll('[data-figure-background]').forEach((node) => {

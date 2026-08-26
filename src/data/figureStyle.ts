@@ -14,6 +14,8 @@ export const DEFAULT_FIGURE_STYLE: FigureStyleOptions = {
   upsetLabelsBold: false,
   upsetValueFontScale: 1,
   upsetValuesBold: false,
+  upsetColumnScale: 1,
+  upsetRowScale: 1,
 };
 
 export function hasFigureFill(style: FigureStyleOptions): boolean {

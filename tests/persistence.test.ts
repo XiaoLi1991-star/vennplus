@@ -70,6 +70,8 @@ describe('VennPlus workspace persistence', () => {
       upsetLabelsBold: _upsetLabelBold,
       upsetValueFontScale: _upsetValueScale,
       upsetValuesBold: _upsetValueBold,
+      upsetColumnScale: _upsetColumnScale,
+      upsetRowScale: _upsetRowScale,
       ...paintStyle
     } = original.figureStyle;
     const normalized = normalizeWorkspaceState({
@@ -85,6 +87,13 @@ describe('VennPlus workspace persistence', () => {
     expect(normalized.figureStyle.upsetValueFontScale).toBe(1);
     expect(normalized.figureStyle.upsetLabelsBold).toBe(false);
     expect(normalized.figureStyle.upsetValuesBold).toBe(false);
+    expect(normalized.figureStyle.upsetColumnScale).toBe(1);
+    expect(normalized.figureStyle.upsetRowScale).toBe(1);
+  });
+
+  it('persists an explicitly cleared selection', () => {
+    const normalized = normalizeWorkspaceState({ ...workspace(), selectedMask: 0 });
+    expect(normalized.selectedMask).toBe(0);
   });
 
   it('restores publication defaults from older project state', () => {

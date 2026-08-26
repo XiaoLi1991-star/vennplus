@@ -90,6 +90,7 @@ function App() {
 
   const { analysis, isAnalyzing } = useSetAnalysis(sets);
   const selectedRegion = useMemo(() => {
+    if (selectedMask === 0) return null;
     const requested = analysis.regionByMask.get(selectedMask);
     if (requested?.count) return requested;
     return (
@@ -449,6 +450,7 @@ function App() {
           isPresentationPreview={isPresentationPreview}
           onModeChange={setMode}
           onSelectRegion={selectRegion}
+          onClearSelection={() => setSelectedMask(0)}
           onSetLabelPositionChange={updateSetLabelPosition}
           onToggleInput={() => setInputCollapsed((current) => !current)}
           onToggleInspector={() => setInspectorCollapsed((current) => !current)}

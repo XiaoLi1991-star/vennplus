@@ -20,11 +20,13 @@ function renderFigureControls({
   figureStyle = DEFAULT_FIGURE_STYLE,
   displayOptions = display,
   hasCustomLabelPositions = false,
+  onFigureStyleChange = () => undefined,
 }: {
   mode?: ViewMode;
   figureStyle?: FigureStyleOptions;
   displayOptions?: DisplayOptions;
   hasCustomLabelPositions?: boolean;
+  onFigureStyleChange?: (patch: Partial<FigureStyleOptions>) => void;
 } = {}) {
   return render(
     <FigureControls
@@ -37,7 +39,7 @@ function renderFigureControls({
       topN={20}
       sort="size"
       onDisplayChange={() => undefined}
-      onFigureStyleChange={() => undefined}
+      onFigureStyleChange={onFigureStyleChange}
       onResetSetLabelPositions={() => undefined}
       onPaletteChange={() => undefined}
       onTopNChange={() => undefined}
@@ -77,12 +79,21 @@ describe('simplified figure controls', () => {
   });
 
   it('keeps UpSet label and value typography separate without Venn shape controls', () => {
-    renderFigureControls({ mode: 'upset' });
+    const onFigureStyleChange = vi.fn();
+    renderFigureControls({ mode: 'upset', onFigureStyleChange });
 
     expect(screen.getByText('集合名称与坐标')).toBeInTheDocument();
     expect(screen.getByText('交集值')).toBeInTheDocument();
     expect(screen.getAllByLabelText('字号')).toHaveLength(2);
+    expect(screen.getByLabelText('交集列距')).toHaveValue('1');
+    expect(screen.getByLabelText('集合行距')).toHaveValue('1');
+    expect(screen.getByText('仅调整矩阵疏密，不改变统计值')).toBeInTheDocument();
     expect(screen.queryByLabelText('填充模式')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('交集列距'), { target: { value: '0.75' } });
+    expect(onFigureStyleChange).toHaveBeenCalledWith({ upsetColumnScale: 0.75 });
+    fireEvent.change(screen.getByLabelText('集合行距'), { target: { value: '1.25' } });
+    expect(onFigureStyleChange).toHaveBeenCalledWith({ upsetRowScale: 1.25 });
   });
 });
 

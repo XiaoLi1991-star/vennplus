@@ -1,9 +1,10 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clipboard, Download, MousePointer2, Search, TextSelect } from 'lucide-react';
+import { Check, Clipboard, Download, MousePointer2, Search, TextSelect, X } from 'lucide-react';
 import type { Region } from '../types';
 
 interface SelectedRegionPanelProps {
   region: Region | null;
+  onClearSelection: () => void;
   onDownloadTxt: () => void;
   onDownloadCsv: () => void;
 }
@@ -27,6 +28,7 @@ async function copyText(text: string): Promise<void> {
 
 export function SelectedRegionPanel({
   region,
+  onClearSelection,
   onDownloadTxt,
   onDownloadCsv,
 }: SelectedRegionPanelProps) {
@@ -77,6 +79,15 @@ export function SelectedRegionPanel({
             <div className="selected-region-title-row">
               <strong>{region.key}</strong>
               <span>{region.count} 个成员</span>
+              <button
+                className="selected-region-clear-button"
+                type="button"
+                aria-label="取消选择"
+                title="取消选择"
+                onClick={onClearSelection}
+              >
+                <X size={13} aria-hidden="true" />
+              </button>
             </div>
           ) : (
             <p>点击 Venn、Euler 区域或 UpSet 柱形查看成员。</p>
@@ -129,7 +140,7 @@ export function SelectedRegionPanel({
               ? '正在筛选…'
               : query
                 ? `显示 ${filteredMembers.length} / ${region.count} 项`
-                : `共 ${region.count} 项 · 可在文本框中直接使用 Ctrl/⌘ + A 和 Ctrl/⌘ + C`
+                : `共 ${region.count} 项 · 点击画布空白处可取消选择 · Ctrl/⌘ + A/C 可全选复制`
           ) : (
             '成员保留输入时的大小写，集合内重复值已去除。'
           )}
