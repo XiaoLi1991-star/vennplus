@@ -16,6 +16,9 @@ export interface Region {
   members: string[];
   count: number;
   percentage: number;
+  includedSets?: string[];
+  excludedSets?: string[];
+  membershipMode?: 'exact' | 'inclusive';
 }
 
 export interface SetAnalysis {

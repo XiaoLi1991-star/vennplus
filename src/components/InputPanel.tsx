@@ -1,4 +1,6 @@
 import { ChevronDown, ChevronUp, Copy, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { SetImportDialog } from './SetImportDialog';
 import { MAX_SET_COUNT, MIN_SET_COUNT } from '../data/limits';
 import type { SetAnalysis, SetDefinition } from '../types';
 
@@ -12,6 +14,7 @@ interface InputPanelProps {
   onAddSet: () => void;
   onRemoveSet: (id: string) => void;
   onDuplicateSet: (id: string) => void;
+  onImportSets?: (sets: Array<{ name: string; text: string }>) => void;
 }
 
 export function InputPanel({
@@ -24,17 +27,23 @@ export function InputPanel({
   onAddSet,
   onRemoveSet,
   onDuplicateSet,
+  onImportSets,
 }: InputPanelProps) {
+  const [tableOpen, setTableOpen] = useState(false);
   return (
     <aside className="panel input-panel" aria-label="输入集合" aria-busy={isAnalyzing}>
       <div className="panel-heading">
         <div>
           <h2>输入集合</h2>
-          <p>每行一个 identifier</p>
+          <p>每行一个成员标识</p>
         </div>
         <span className="panel-count">{sets.length} / {MAX_SET_COUNT}</span>
       </div>
 
+      {onImportSets ? <div className="table-import">
+        <button type="button" onClick={() => setTableOpen(!tableOpen)}>粘贴表格／导入文件</button>
+        {tableOpen ? <SetImportDialog onClose={() => setTableOpen(false)} onImport={onImportSets} /> : null}
+      </div> : null}
       <div className="set-accordion">
         {sets.map((set, index) => {
           const expanded = expandedSetId === set.id;
@@ -62,6 +71,8 @@ export function InputPanel({
                 </button>
               </div>
 
+              {sets.some((other) => other.id !== set.id && other.name.trim() === set.name.trim()) ? <p className="input-warning" role="status">组名重复，请修改以区分集合。</p> : null}
+
               {expanded ? (
                 <div className="set-editor-body">
                   <div className="set-editor-actions">
@@ -84,12 +95,13 @@ export function InputPanel({
                     </div>
                   </div>
                   <textarea
-                    aria-label={`${set.name} 的 identifier 列表`}
+                    aria-label={`${set.name} 的成员标识列表`}
                     spellCheck={false}
                     value={set.text}
                     onChange={(event) => onChangeSet(set.id, { text: event.target.value })}
                   />
                   <div className="set-input-meta">
+                    {set.text.includes('\t') ? <span className="input-warning">检测到 Tab：多列表格请使用上方“粘贴表格”入口。</span> : null}
                     <span>空行将被忽略，大小写敏感</span>
                     {duplicateCount > 0 ? <span>{duplicateCount} 个组内重复已去除</span> : null}
                   </div>

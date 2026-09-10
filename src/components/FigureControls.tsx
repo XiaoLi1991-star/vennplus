@@ -1,5 +1,6 @@
 import { hasFigureFill } from '../data/figureStyle';
-import { RotateCcw } from 'lucide-react';
+import { Check, RotateCcw } from 'lucide-react';
+import { NumberField } from './NumberField';
 import type { PalettePreset } from '../data/palettes';
 import {
   UPSET_MAX_COLUMN_SCALE,
@@ -67,7 +68,7 @@ function SliderControl({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className={`slider-control ${disabled ? 'is-disabled' : ''}`}>
+    <div className={`slider-control ${disabled ? 'is-disabled' : ''}`}>
       <span>{label}</span>
       <input
         type="range"
@@ -79,8 +80,11 @@ function SliderControl({
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
       />
-      <output>{output}</output>
-    </label>
+      <NumberField label={`${label}数值`} disabled={disabled} value={output.endsWith('%') ? value * 100 : value}
+        min={output.endsWith('%') ? min * 100 : min} max={output.endsWith('%') ? max * 100 : max}
+        step={output.endsWith('%') ? step * 100 : step} unit={output.endsWith('%') ? '%' : 'px'}
+        onChange={(next) => { if (!disabled) onChange(output.endsWith('%') ? next / 100 : next); }} />
+    </div>
   );
 }
 
@@ -103,7 +107,7 @@ function TypographyRow({
 }) {
   return (
     <div className="typography-control-row">
-      <span className="typography-control-title">{title}</span>
+      {title !== '文字' ? <span className="typography-control-title">{title}</span> : null}
       <SliderControl
         label="字号"
         value={scale}
@@ -134,7 +138,6 @@ export function FigureControls({
   onTopNChange,
   onSortChange,
 }: FigureControlsProps) {
-  const currentPalette = palettes.find((palette) => palette.id === paletteId) ?? palettes[0];
   const fillEnabled = figureStyle.fillMode === 'filled';
   const hasVisibleFill = hasFigureFill(figureStyle);
 
@@ -204,7 +207,7 @@ export function FigureControls({
                   })
                 }
               >
-                <option value="count">数量 Count</option>
+                <option value="count">数量</option>
                 <option value="percentage">占并集比例</option>
                 <option value="both">数值 + 占并集比例</option>
                 <option value="none">不显示</option>
@@ -273,7 +276,7 @@ export function FigureControls({
               <select value={topN} onChange={(event) => onTopNChange(Number(event.target.value))}>
                 {[10, 15, 20, 30, 50].map((value) => (
                   <option key={value} value={value}>
-                    Top {value}
+                    前 {value} 个
                   </option>
                 ))}
               </select>
@@ -281,23 +284,15 @@ export function FigureControls({
           </div>
         ) : null}
 
-        <label className="palette-control">
-          <span className="control-group-label">配色 Palette</span>
-          <div className="palette-select-wrap">
-            <div className="palette-swatches" aria-hidden="true">
-              {currentPalette.colors.map((color) => (
-                <span key={color} style={{ backgroundColor: color }} />
-              ))}
-            </div>
-            <select value={paletteId} onChange={(event) => onPaletteChange(event.target.value)}>
-              {palettes.map((palette) => (
-                <option key={palette.id} value={palette.id}>
-                  {palette.name}
-                </option>
-              ))}
-            </select>
+        <section className="palette-control">
+          <span className="control-group-label">配色</span>
+          <div className="palette-list" aria-label="图形色板">
+            {palettes.map((palette) => <button type="button" key={palette.id} aria-label={palette.name} aria-pressed={paletteId === palette.id} title={palette.description} onClick={() => onPaletteChange(palette.id)}>
+              <span className="palette-name">{palette.name}{paletteId === palette.id ? <Check size={16} aria-hidden="true" /> : null}</span>
+              <span className="palette-strip" aria-hidden="true">{palette.colors.map((color, i) => <span key={i} style={{ backgroundColor: color }} />)}</span>
+            </button>)}
           </div>
-        </label>
+        </section>
       </div>
 
       {mode !== 'upset' ? (

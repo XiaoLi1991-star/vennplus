@@ -1,12 +1,14 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Clipboard, Download, MousePointer2, Search, TextSelect, X } from 'lucide-react';
-import type { Region } from '../types';
+import type { Region, SetAnalysis } from '../types';
+import { describeRegion, queryIntersection } from '../lib/sets';
 
 interface SelectedRegionPanelProps {
   region: Region | null;
   onClearSelection: () => void;
-  onDownloadTxt: () => void;
-  onDownloadCsv: () => void;
+  onDownloadTxt: (region: Region) => void;
+  onDownloadCsv: (region: Region) => void;
+  analysis?: SetAnalysis;
 }
 
 async function copyText(text: string): Promise<void> {
@@ -27,11 +29,15 @@ async function copyText(text: string): Promise<void> {
 }
 
 export function SelectedRegionPanel({
-  region,
+  region: exactRegion,
   onClearSelection,
   onDownloadTxt,
   onDownloadCsv,
+  analysis,
 }: SelectedRegionPanelProps) {
+  const [inclusive, setInclusive] = useState(false);
+  const [scope, setScope] = useState<'visible' | 'all'>('visible');
+  const region = useMemo(() => exactRegion && analysis ? queryIntersection(exactRegion, analysis, inclusive) : exactRegion, [exactRegion, analysis, inclusive]);
   const [query, setQuery] = useState('');
   const [copied, setCopied] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -49,6 +55,8 @@ export function SelectedRegionPanel({
     return region.members.filter((member) => member.toLocaleLowerCase().includes(normalizedQuery));
   }, [deferredQuery, region]);
   const memberText = useMemo(() => filteredMembers.join('\n'), [filteredMembers]);
+  const actionMembers = scope === 'all' ? region?.members ?? [] : filteredMembers;
+  const actionRegion = region ? { ...region, members: actionMembers, count: actionMembers.length } : null;
   const memberPlaceholder = !region
     ? '选择非空交集后，成员会在这里逐行显示。'
     : query === deferredQuery && query.trim() && filteredMembers.length === 0
@@ -61,19 +69,19 @@ export function SelectedRegionPanel({
   };
 
   const copyVisible = async () => {
-    if (!memberText) return;
-    await copyText(memberText);
+    if (!actionMembers.length) return;
+    await copyText(actionMembers.join('\n'));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <section className="selected-region-panel" aria-label="选中区域成员">
+    <section className={`selected-region-panel ${region ? '' : 'is-empty'}`} aria-label="选中区域成员">
       <header className="selected-region-header">
         <div className="selected-region-identity">
           <span className="selected-region-kicker">
             <MousePointer2 size={13} aria-hidden="true" />
-            选中区域 Selected intersection
+            选中区域
           </span>
           {region ? (
             <div className="selected-region-title-row">
@@ -100,7 +108,7 @@ export function SelectedRegionPanel({
             <input
               type="search"
               aria-label="搜索选中区域成员"
-              placeholder="搜索基因或 identifier"
+              placeholder="搜索基因或成员标识"
               value={query}
               disabled={!region}
               onChange={(event) => setQuery(event.target.value)}
@@ -110,20 +118,31 @@ export function SelectedRegionPanel({
             <TextSelect size={15} aria-hidden="true" />
             全选
           </button>
-          <button type="button" disabled={!memberText} onClick={() => void copyVisible()}>
+          <select aria-label="复制与下载范围" value={scope} onChange={(e) => setScope(e.target.value as 'visible' | 'all')}>
+            <option value="visible">当前搜索结果</option><option value="all">整个区域</option>
+          </select>
+          <button type="button" disabled={!actionMembers.length || query !== deferredQuery} onClick={() => void copyVisible()}>
             {copied ? <Check size={15} aria-hidden="true" /> : <Clipboard size={15} aria-hidden="true" />}
-            {copied ? '已复制' : query ? '复制结果' : '复制全部'}
+            {copied ? '已复制' : query && scope === 'visible' ? '复制结果' : '复制全部'}
           </button>
-          <button type="button" disabled={!region} onClick={onDownloadTxt}>
+          <button type="button" disabled={!actionMembers.length || query !== deferredQuery} onClick={() => actionRegion && onDownloadTxt(actionRegion)}>
             <Download size={15} aria-hidden="true" />
             TXT
           </button>
-          <button type="button" disabled={!region} onClick={onDownloadCsv}>
+          <button type="button" disabled={!actionMembers.length || query !== deferredQuery} onClick={() => actionRegion && onDownloadCsv(actionRegion)}>
             <Download size={15} aria-hidden="true" />
             CSV
           </button>
         </div>
       </header>
+
+      {region ? <div className="region-semantics">
+        {analysis ? <select aria-label="交集口径" value={inclusive ? 'inclusive' : 'exact'} onChange={(e) => setInclusive(e.target.value === 'inclusive')}>
+          <option value="exact">仅这些组（精确区域）</option><option value="inclusive">至少这些组</option>
+        </select> : null}
+        <span>{describeRegion(region)}</span>
+        {inclusive ? <small>图中高亮仍表示原精确区域。</small> : null}
+      </div> : null}
 
       <div className="selected-region-body">
         <textarea

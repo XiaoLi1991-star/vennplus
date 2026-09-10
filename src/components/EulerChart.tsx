@@ -1,5 +1,5 @@
 import { forwardRef, useId, useMemo } from 'react';
-import { layout, type ICircle, type ISetOverlap } from '@upsetjs/venn.js';
+import { layout, venn, type ICircle, type ISetOverlap } from '@upsetjs/venn.js';
 import type {
   DisplayOptions,
   FigureStyleOptions,
@@ -12,6 +12,7 @@ import {
   formatRegionLabelLines,
   getSetDisplayName,
   maskToIndices,
+  inclusiveIntersectionCount,
 } from '../lib/sets';
 import {
   clampSetLabelPosition,
@@ -22,6 +23,7 @@ import {
 } from '../lib/labelLayout';
 import { fitViewBoxToAspectRatio } from '../lib/viewBox';
 import { DraggableSetLabel } from './DraggableSetLabel';
+import { assessEulerFit } from '../lib/eulerFit';
 
 interface EulerChartProps {
   sets: SetDefinition[];
@@ -56,7 +58,7 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
   ref,
 ) {
   const selectionId = `euler-selection-${useId().replace(/:/g, '')}`;
-  const letters = sets.map((_, index) => String.fromCharCode(65 + index));
+  const letters = useMemo(() => sets.map((_, index) => String.fromCharCode(65 + index)), [sets.length]);
   const layoutItems = useMemo(() => {
     const data: EulerDatum[] = [];
     // Euler's layout solver needs explicit zero-valued singleton and pairwise
@@ -67,10 +69,9 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
       const count = region?.count ?? 0;
       data.push({
         sets: maskToIndices(mask, sets.length).map((index) => letters[index]),
-        // `distinct: true` expects exact region sizes and reconstructs the
-        // inclusive singleton/pairwise areas internally. Passing inclusive
-        // counts here would add the overlaps twice and flatten circle ratios.
-        size: count,
+        // The library's distinct conversion only fixes degrees 1 and 2.
+        // Feed inclusive counts at EVERY degree; labels retain exact counts.
+        size: inclusiveIntersectionCount(mask, analysis),
         exactSize: count,
         percentage: region?.percentage ?? 0,
         mask,
@@ -80,7 +81,17 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
       width: 720,
       height: 530,
       padding: 46,
-      distinct: true,
+      distinct: false,
+      layoutFunction: (items, options) => {
+        // A containment chain has an exact concentric solution. Avoid the
+        // solver's internally tangent circles and unstable degenerate arcs.
+        const chain = sets.every((_, i) => sets.every((__, j) => i === j ||
+          inclusiveIntersectionCount((1 << i) | (1 << j), analysis) ===
+          Math.min(analysis.parsedSets[i].length, analysis.parsedSets[j].length)));
+        return chain ? Object.fromEntries(letters.map((letter, i) => [letter, {
+          setid: letter, x: 0, y: 0, radius: Math.sqrt(analysis.parsedSets[i].length / Math.PI),
+        }])) : venn(items, options);
+      },
       round: 3,
       orientation: Math.PI / 2,
     });
@@ -95,6 +106,7 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
     });
     return letters.map((letter) => values.get(letter)).filter((circle): circle is ICircle => Boolean(circle));
   }, [layoutItems, letters]);
+  const fit = useMemo(() => assessEulerFit(circles, analysis), [circles, analysis]);
 
   const center = circles.reduce(
     (value, circle) => ({ x: value.x + circle.x / circles.length, y: value.y + circle.y / circles.length }),
@@ -189,7 +201,7 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
   const separateKeyWidth = separateListWidth - separateValueWidth - regionFontSize * 0.8;
   const separateListHeight = separateLabelFontSize * 1.7 + separateRegionLabels.length * separateLabelGap;
   const separateListY = center.y - separateListHeight / 2;
-  const contentViewBox = baseContentViewBox;
+  const contentViewBox: [number, number, number, number] = [baseContentViewBox[0], baseContentViewBox[1], baseContentViewBox[2], baseContentViewBox[3] + 26];
   const figureViewBox = fitViewBoxToAspectRatio(
     contentViewBox,
     targetAspectRatio ?? contentViewBox[2] / contentViewBox[3],
@@ -204,6 +216,7 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
       role="img"
       aria-labelledby="euler-title euler-description"
       data-figure="euler"
+      data-max-region-error={fit.maxRegionError}
       data-region-label-count={renderedRegionLabelCount}
       data-spatial-region-label-count={spatialRegionLabels.length}
       data-separate-region-label-count={separateRegionLabels.length}
@@ -219,6 +232,10 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
         height={figureViewBox[3]}
         fill="#ffffff"
       />
+      <text x={360} y={baseContentViewBox[1] + baseContentViewBox[3] + 15} textAnchor="middle" fontSize={10}
+        fill={fit.maxRegionError > 0.01 ? '#995620' : '#69777e'} data-euler-fit="true">
+        {`Area fit: max region error ${(fit.maxRegionError * 100).toFixed(2)}% of union${fit.maxRegionError > 0.01 ? ' — use counts / UpSet for exact comparison' : ''}`}
+      </text>
 
       {selectedSpatialPath ? (
         <defs data-export-ignore="true">

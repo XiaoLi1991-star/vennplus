@@ -3,14 +3,13 @@ import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { AppHeader } from './components/AppHeader';
 import { FigurePanel } from './components/FigurePanel';
 import { InputPanel } from './components/InputPanel';
-import { InspectorPanel, type InspectorTab } from './components/InspectorPanel';
+import { InspectorPanel } from './components/InspectorPanel';
 import type { UpSetSort } from './components/UpSetChart';
 import { cloneExample, DEFAULT_EXAMPLE, EXAMPLES } from './data/examples';
 import { DEFAULT_FIGURE_STYLE } from './data/figureStyle';
 import { MAX_EULER_SET_COUNT, MAX_SET_COUNT, MAX_VENN_SET_COUNT } from './data/limits';
 import { DEFAULT_PALETTE, PALETTES } from './data/palettes';
 import {
-  assessPublicationFigure,
   DEFAULT_PUBLICATION_SETTINGS,
 } from './data/publication';
 import { useSetAnalysis } from './hooks/useSetAnalysis';
@@ -29,6 +28,8 @@ import {
   exportWorkbook,
 } from './lib/download';
 import { createPublicationManifest } from './lib/publicationManifest';
+import { nextSetColor, uniqueSetName } from './lib/setImport';
+import { measureFigureFonts } from './lib/figureMetrics';
 import {
   exportWorkspaceProject,
   importWorkspaceProject,
@@ -72,15 +73,14 @@ function App() {
     Record<'venn' | 'euler', SetLabelPositions>
   >({ venn: {}, euler: {} });
   const [paletteId, setPaletteId] = useState(DEFAULT_PALETTE.id);
-  const [selectedMask, setSelectedMask] = useState(15);
+  const [selectedMask, setSelectedMask] = useState(0);
   const [topN, setTopN] = useState(20);
   const [sort, setSort] = useState<UpSetSort>('size');
   const [publication, setPublication] = useState<PublicationSettings>(DEFAULT_PUBLICATION_SETTINGS);
   const [inputCollapsed, setInputCollapsed] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
-  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('style');
   const [isPresentationPreview, setIsPresentationPreview] = useState(false);
-  const [svgViewBoxWidth, setSvgViewBoxWidth] = useState(4.2);
+  const [fontMetrics, setFontMetrics] = useState({ minimum: 0, labels: 0, values: 0 });
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [draftReady, setDraftReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'loading' | 'saving' | 'saved' | 'error'>('loading');
@@ -92,12 +92,7 @@ function App() {
   const selectedRegion = useMemo(() => {
     if (selectedMask === 0) return null;
     const requested = analysis.regionByMask.get(selectedMask);
-    if (requested?.count) return requested;
-    return (
-      [...analysis.regions]
-        .filter((region) => region.count > 0)
-        .sort((a, b) => b.setIndices.length - a.setIndices.length || b.count - a.count)[0] ?? null
-    );
+    return requested?.count ? requested : null;
   }, [analysis, selectedMask]);
 
   const showNotice = (type: 'success' | 'error', message: string) => {
@@ -175,13 +170,12 @@ function App() {
 
   useLayoutEffect(() => {
     const updateViewBoxWidth = () => {
-      const width = figureRef.current?.viewBox.baseVal.width;
-      if (width && Number.isFinite(width)) setSvgViewBoxWidth(width);
+      if (figureRef.current) setFontMetrics(measureFigureFonts(figureRef.current, publication.widthMm));
     };
     updateViewBoxWidth();
     const frame = window.requestAnimationFrame(updateViewBoxWidth);
     return () => window.cancelAnimationFrame(frame);
-  }, [display, figureStyle, isPresentationPreview, mode, publication, sets, sort, topN]);
+  }, [analysis, display, figureStyle, isPresentationPreview, mode, publication, sets, sort, topN]);
 
   useEffect(() => {
     if (!draftReady) return undefined;
@@ -227,8 +221,8 @@ function App() {
         ...current,
         {
           id: createSetId(),
-          name: `Group ${String.fromCharCode(65 + nextIndex)}`,
-          color: PALETTES.find((palette) => palette.id === paletteId)!.colors[nextIndex],
+          name: uniqueSetName(`Group ${String.fromCharCode(65 + nextIndex)}`, current),
+          color: nextSetColor(current, (PALETTES.find((palette) => palette.id === paletteId) ?? DEFAULT_PALETTE).colors),
           text: '',
         },
       ];
@@ -242,6 +236,7 @@ function App() {
   };
 
   const removeSet = (id: string) => {
+    setSelectedMask(0);
     setSetLabelPositions({ venn: {}, euler: {} });
     setSets((current) => {
       if (current.length <= 2) return current;
@@ -261,8 +256,8 @@ function App() {
       const duplicate = {
         ...source,
         id: createSetId(),
-        name: `${source.name} copy`,
-        color: PALETTES.find((palette) => palette.id === paletteId)!.colors[nextIndex],
+        name: uniqueSetName(`${source.name} copy`, current),
+        color: nextSetColor(current, (PALETTES.find((palette) => palette.id === paletteId) ?? DEFAULT_PALETTE).colors),
       };
       setExpandedSetId(duplicate.id);
       if (
@@ -284,7 +279,7 @@ function App() {
     setExpandedSetId(window.matchMedia('(max-width: 760px)').matches ? '' : next[0].id);
     setMode(example.defaultMode);
     setSetLabelPositions({ venn: {}, euler: {} });
-    setSelectedMask(example.sets.length >= 4 ? 15 : (1 << example.sets.length) - 1);
+    setSelectedMask(0);
     showNotice('success', `已加载${example.name}`);
   };
 
@@ -295,37 +290,25 @@ function App() {
     setSets((current) => current.map((set, index) => ({ ...set, color: palette.colors[index] })));
   };
 
-  const publicationAssessment = useMemo(
-    () =>
-      assessPublicationFigure({
-        mode,
-        setCount: sets.length,
-        topN,
-        figureStyle,
-        viewBoxWidth: svgViewBoxWidth,
-        settings: publication,
-      }),
-    [figureStyle, mode, publication, sets.length, svgViewBoxWidth, topN],
-  );
-
   const runExport = async (task: (svg: SVGSVGElement) => void | Promise<void>, success: string) => {
     const svg = figureRef.current;
-    if (!svg) return;
+    if (!svg) throw new Error('图形尚未就绪');
     try {
       await task(svg);
       showNotice('success', success);
     } catch (error) {
       console.error(error);
       showNotice('error', '导出失败，请重试');
+      throw error;
     }
   };
 
   const handleExportSvg = () =>
-    runExport((svg) => exportSvg(svg, projectTitle, publication), 'SVG 已按发表规格导出');
+    runExport((svg) => exportSvg(svg, projectTitle, publication), 'SVG 已按当前尺寸导出');
   const handleExportPng = () =>
-    runExport((svg) => exportPng(svg, projectTitle, publication), 'PNG 已按发表规格导出');
+    runExport((svg) => exportPng(svg, projectTitle, publication), 'PNG 已按当前尺寸导出');
   const handleExportPdf = () =>
-    runExport((svg) => exportPdf(svg, projectTitle, publication), 'PDF 已按发表规格导出');
+    runExport((svg) => exportPdf(svg, projectTitle, publication), 'PDF 已按当前尺寸导出');
   const handleExportTiff = () =>
     runExport((svg) => exportTiff(svg, projectTitle, publication), 'TIFF 已写入当前物理 DPI');
   const handleExportXlsx = async () => {
@@ -335,11 +318,12 @@ function App() {
     } catch (error) {
       console.error(error);
       showNotice('error', 'XLSX 导出失败，请重试');
+      throw error;
     }
   };
   const handleExportManifest = async () => {
     const svg = figureRef.current;
-    if (!svg) return;
+    if (!svg) throw new Error('图形尚未就绪');
     try {
       const manifest = await createPublicationManifest({
         state: workspaceState,
@@ -350,6 +334,7 @@ function App() {
     } catch (error) {
       console.error(error);
       showNotice('error', '复现清单导出失败，请重试');
+      throw error;
     }
   };
 
@@ -374,6 +359,9 @@ function App() {
   return (
     <div className={`app-shell ${isPresentationPreview ? 'is-presentation-preview' : ''}`}>
       <AppHeader
+        publication={publication}
+        minimumFontPt={fontMetrics.minimum}
+        onPublicationChange={(patch) => setPublication((current) => ({ ...current, ...patch }))}
         examples={EXAMPLES}
         onLoadExample={loadExample}
         saveStatus={saveStatus}
@@ -431,6 +419,16 @@ function App() {
           onAddSet={addSet}
           onRemoveSet={removeSet}
           onDuplicateSet={duplicateSet}
+          onImportSets={(items) => {
+            const palette = PALETTES.find((item) => item.id === paletteId) ?? DEFAULT_PALETTE;
+            const imported = items.map((item, i) => ({ ...item, id: createSetId(), color: palette.colors[i] }));
+            setSets(imported);
+            setExpandedSetId(imported[0].id);
+            setSelectedMask(0);
+            setSetLabelPositions({ venn: {}, euler: {} });
+            if (imported.length > (mode === 'euler' ? MAX_EULER_SET_COUNT : MAX_VENN_SET_COUNT)) setMode('upset');
+            showNotice('success', `已导入 ${imported.length} 个集合，可撤销恢复原数据`);
+          }}
         /> : null}
         <FigurePanel
           ref={figureRef}
@@ -457,16 +455,15 @@ function App() {
           onTogglePresentationPreview={() =>
             setIsPresentationPreview((current) => !current)
           }
-          onDownloadRegionTxt={() =>
-            selectedRegion && exportRegionTxt(selectedRegion, projectTitle)
+          onDownloadRegionTxt={(region) =>
+            exportRegionTxt(region, projectTitle)
           }
-          onDownloadRegionCsv={() =>
-            selectedRegion && exportRegionCsv(selectedRegion, projectTitle)
+          onDownloadRegionCsv={(region) =>
+            exportRegionCsv(region, projectTitle)
           }
         />
         {!inspectorCollapsed ? (
           <InspectorPanel
-            activeTab={inspectorTab}
             mode={mode}
             display={display}
             figureStyle={figureStyle}
@@ -475,9 +472,7 @@ function App() {
             paletteId={paletteId}
             topN={topN}
             sort={sort}
-            publication={publication}
-            assessment={publicationAssessment}
-            onTabChange={setInspectorTab}
+            fontMetrics={fontMetrics}
             onDisplayChange={(patch) => setDisplay((current) => ({ ...current, ...patch }))}
             onFigureStyleChange={(patch) =>
               setFigureStyle((current) => ({ ...current, ...patch }))
@@ -486,9 +481,6 @@ function App() {
             onPaletteChange={changePalette}
             onTopNChange={setTopN}
             onSortChange={setSort}
-            onPublicationChange={(patch) =>
-              setPublication((current) => ({ ...current, ...patch }))
-            }
           />
         ) : null}
       </div>

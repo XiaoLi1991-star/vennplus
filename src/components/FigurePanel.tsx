@@ -12,7 +12,7 @@ import type {
 } from '../types';
 import { EulerChart } from './EulerChart';
 import { PublicationToolbar } from './PublicationToolbar';
-import { SelectedRegionPanel } from './SelectedRegionPanel';
+import { IntersectionResults } from './IntersectionResults';
 import { UpSetChart, type UpSetSort } from './UpSetChart';
 import { VennChart } from './VennChart';
 
@@ -38,8 +38,8 @@ interface FigurePanelProps {
   onToggleInput: () => void;
   onToggleInspector: () => void;
   onTogglePresentationPreview: () => void;
-  onDownloadRegionTxt: () => void;
-  onDownloadRegionCsv: () => void;
+  onDownloadRegionTxt: (region: Region) => void;
+  onDownloadRegionCsv: (region: Region) => void;
 }
 
 export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function FigurePanel(
@@ -85,23 +85,7 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
   return (
     <main className={`figure-workspace ${isPresentationPreview ? 'is-presentation-preview' : ''}`}>
       <PublicationToolbar
-        mode={mode}
-        setCount={sets.length}
-        inputCollapsed={inputCollapsed}
-        inspectorCollapsed={inspectorCollapsed}
-        isPresentationPreview={isPresentationPreview}
-        onModeChange={onModeChange}
-        onToggleInput={onToggleInput}
-        onToggleInspector={onToggleInspector}
-        onTogglePresentationPreview={onTogglePresentationPreview}
-      />
-      <div className={`figure-surface figure-surface-${mode}`}>
-        <div className="figure-summary" data-export-ignore="true" aria-live="polite">
-          <span>{sets.length} 个集合</span>
-          <span>{analysis.unionCount} 个唯一 identifier</span>
-          <span>{analysis.regions.filter((region) => region.count > 0).length} 个非空交集</span>
-          {isAnalyzing ? <span className="analysis-status">正在计算最新输入…</span> : null}
-          {zoomableMode ? (
+        zoomControls={zoomableMode ? (
             <div className="canvas-zoom-controls" aria-label="画布缩放">
               <button
                 type="button"
@@ -133,6 +117,23 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
               </button>
             </div>
           ) : null}
+        mode={mode}
+        setCount={sets.length}
+        inputCollapsed={inputCollapsed}
+        inspectorCollapsed={inspectorCollapsed}
+        isPresentationPreview={isPresentationPreview}
+        onModeChange={onModeChange}
+        onToggleInput={onToggleInput}
+        onToggleInspector={onToggleInspector}
+        onTogglePresentationPreview={onTogglePresentationPreview}
+      />
+      <div className={`figure-surface figure-surface-${mode}`}>
+        <div className="figure-summary" data-export-ignore="true" aria-live="polite">
+          <span>{sets.length} 个集合</span>
+          <span>{analysis.unionCount} 个唯一成员</span>
+          <span>{analysis.regions.filter((region) => region.count > 0).length} 个非空交集</span>
+          {isAnalyzing ? <span className="analysis-status">正在计算最新输入…</span> : null}
+
         </div>
         <div
           className="figure-stage"
@@ -145,7 +146,7 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
             onClearSelection();
           }}
         >
-          {mode === 'venn' || mode === 'euler' ? (
+          {isAnalyzing ? <p role="status">正在计算最新输入，完成后显示图形与交集。</p> : mode === 'venn' || mode === 'euler' ? (
             <div
               className="figure-canvas"
               style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
@@ -188,14 +189,19 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
               figureStyle={figureStyle}
               topN={topN}
               sort={sort}
+              selectedMask={selectedRegion?.mask}
+              targetAspectRatio={targetAspectRatio}
               onSelectRegion={onSelectRegion}
             />
           )}
         </div>
       </div>
-      <SelectedRegionPanel
+      <IntersectionResults
+        sets={sets}
+        analysis={analysis}
         region={selectedRegion}
-        onClearSelection={onClearSelection}
+        onSelect={onSelectRegion}
+        onClear={onClearSelection}
         onDownloadTxt={onDownloadRegionTxt}
         onDownloadCsv={onDownloadRegionCsv}
       />

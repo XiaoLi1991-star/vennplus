@@ -80,6 +80,9 @@ export function analyzeSets(sets: SetDefinition[]): SetAnalysis {
         members,
         count: members.length,
         percentage: unionCount === 0 ? 0 : members.length / unionCount,
+        includedSets: maskToIndices(mask, sets.length).map((i) => getSetDisplayName(sets[i], i)),
+        excludedSets: sets.flatMap((set, i) => mask & (1 << i) ? [] : [getSetDisplayName(set, i)]),
+        membershipMode: 'exact' as const,
       };
     });
 
@@ -99,6 +102,19 @@ export function inclusiveIntersectionCount(regionMask: number, analysis: SetAnal
     if ((region.mask & regionMask) === regionMask) count += region.count;
   });
   return count;
+}
+
+export function queryIntersection(region: Region, analysis: SetAnalysis, inclusive: boolean): Region {
+  if (!inclusive) return region;
+  const members = analysis.regions.filter((item) => (item.mask & region.mask) === region.mask)
+    .flatMap((item) => item.members).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  return { ...region, members, count: members.length, percentage: analysis.unionCount ? members.length / analysis.unionCount : 0,
+    excludedSets: [], membershipMode: 'inclusive' };
+}
+
+export function describeRegion(region: Region): string {
+  const included = region.includedSets?.join(' ∩ ') ?? region.key;
+  return `${region.membershipMode === 'inclusive' ? '至少包含' : '仅包含'}：${included}；排除：${region.excludedSets?.join('、') || '无'}`;
 }
 
 export function getDuplicateCount(text: string): number {

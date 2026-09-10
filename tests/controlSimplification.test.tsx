@@ -4,7 +4,6 @@ import { FigureControls } from '../src/components/FigureControls';
 import { InspectorPanel } from '../src/components/InspectorPanel';
 import { DEFAULT_FIGURE_STYLE } from '../src/data/figureStyle';
 import { PALETTES } from '../src/data/palettes';
-import { DEFAULT_PUBLICATION_SETTINGS } from '../src/data/publication';
 import type { DisplayOptions, FigureStyleOptions, ViewMode } from '../src/types';
 
 const display: DisplayOptions = {
@@ -97,12 +96,10 @@ describe('simplified figure controls', () => {
   });
 });
 
-describe('output settings inspector', () => {
-  it('contains output parameters without duplicating download actions', () => {
-    const onPublicationChange = vi.fn();
+describe('style-only inspector', () => {
+  it('keeps figure controls and font metrics separate from export actions', () => {
     render(
       <InspectorPanel
-        activeTab="export"
         mode="venn"
         display={display}
         figureStyle={DEFAULT_FIGURE_STYLE}
@@ -111,32 +108,22 @@ describe('output settings inspector', () => {
         paletteId={PALETTES[0].id}
         topN={20}
         sort="size"
-        publication={DEFAULT_PUBLICATION_SETTINGS}
-        assessment={{
-          minimumFontPt: 8.2,
-          status: 'ready',
-          label: '发表尺寸通过',
-          messages: [],
-        }}
-        onTabChange={() => undefined}
+        fontMetrics={{ minimum: 8.2, labels: 10, values: 8.2 }}
         onDisplayChange={() => undefined}
         onFigureStyleChange={() => undefined}
         onResetSetLabelPositions={() => undefined}
         onPaletteChange={() => undefined}
         onTopNChange={() => undefined}
         onSortChange={() => undefined}
-        onPublicationChange={onPublicationChange}
       />,
     );
 
-    expect(screen.getByRole('button', { name: '导出设置' })).toBeInTheDocument();
-    expect(screen.getByText('成品尺寸')).toBeInTheDocument();
-    expect(screen.getByText('文件规格')).toBeInTheDocument();
-    expect(screen.getByText('计算与导出说明')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '图形设置' })).toBeInTheDocument();
+    expect(screen.getByText('成品字号')).toBeInTheDocument();
+    expect(screen.queryByText('成品尺寸')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'SVG' })).not.toBeInTheDocument();
     expect(screen.queryByText('发表尺寸通过')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('成品宽度 mm'), { target: { value: '210' } });
-    expect(onPublicationChange).toHaveBeenCalledWith({ widthMm: 210 });
+    expect(screen.getByRole('button', { name: /ggvenn 柔和/ })).toHaveAttribute('aria-pressed', 'true');
   });
 });

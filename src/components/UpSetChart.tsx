@@ -9,6 +9,7 @@ import type {
   UpSetSort,
 } from '../types';
 import { estimateSvgTextWidth } from '../lib/labelLayout';
+import { fitViewBoxToAspectRatio } from '../lib/viewBox';
 import { formatRegionLabelLines, getSetDisplayName } from '../lib/sets';
 import {
   createUpSetLayout,
@@ -28,6 +29,8 @@ interface UpSetChartProps {
   topN: number;
   sort: UpSetSort;
   onSelectRegion: (mask: number) => void;
+  selectedMask?: number | null;
+  targetAspectRatio?: number;
 }
 
 interface SetLaneProps {
@@ -117,7 +120,7 @@ function SetLaneMarks({
 }
 
 export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function UpSetChart(
-  { sets, analysis, display, figureStyle, topN, sort, onSelectRegion },
+  { sets, analysis, display, figureStyle, topN, sort, onSelectRegion, selectedMask, targetAspectRatio },
   ref,
 ) {
   const scrollViewportRef = useRef<HTMLDivElement>(null);
@@ -213,17 +216,17 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
   const ticks = barScale.ticks(4);
   const totalActual = analysis.regions.length;
   const visibleActual = visibleRegions.length;
-  // Keep the interactive preview on the chart's natural coordinate ratio.
-  // The export clone redistributes vertical anchors for the requested physical
-  // aspect ratio, while the live chart retains a compact scrolling viewport.
-  const figureViewBox = [0, 0, width, height] as const;
+  // Physical canvas adds margins, never stretches bars or matrix spacing.
+  const figureViewBox = fitViewBoxToAspectRatio(
+    [0, 0, width, height], targetAspectRatio ?? width / height, isDense ? 'top-left' : 'center',
+  );
 
   const chartStyle = {
-    '--upset-mobile-width': `${Math.ceil(width * UPSET_MIN_RENDER_SCALE)}px`,
-    '--upset-mobile-height': `${Math.ceil(height * UPSET_MIN_RENDER_SCALE)}px`,
+    '--upset-mobile-width': `${Math.ceil(figureViewBox[2] * UPSET_MIN_RENDER_SCALE)}px`,
+    '--upset-mobile-height': `${Math.ceil(figureViewBox[3] * UPSET_MIN_RENDER_SCALE)}px`,
     '--upset-mobile-lane-width': `${Math.ceil(plotLeft * UPSET_MIN_RENDER_SCALE)}px`,
     '--upset-desktop-lane-width': `${Math.ceil(plotLeft * UPSET_MIN_RENDER_SCALE)}px`,
-    '--upset-desktop-lane-height': `${Math.ceil(height * UPSET_MIN_RENDER_SCALE)}px`,
+    '--upset-desktop-lane-height': `${Math.ceil(figureViewBox[3] * UPSET_MIN_RENDER_SCALE)}px`,
   } as CSSProperties;
 
   const assignChartRef = useCallback(
@@ -250,9 +253,9 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
         minimumMobileScrollLeftRef.current = 0;
         const chartRect = chart.getBoundingClientRect();
         if (chartRect.width > 0 && chartRect.height > 0) {
-          const scale = Math.min(chartRect.width / width, chartRect.height / height);
+          const scale = Math.min(chartRect.width / figureViewBox[2], chartRect.height / figureViewBox[3]);
           shell.style.setProperty('--upset-desktop-lane-width', `${plotLeft * scale}px`);
-          shell.style.setProperty('--upset-desktop-lane-height', `${height * scale}px`);
+          shell.style.setProperty('--upset-desktop-lane-height', `${figureViewBox[3] * scale}px`);
         }
         return;
       }
@@ -279,7 +282,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
       resizeObserver?.disconnect();
       window.removeEventListener('resize', alignChartChrome);
     };
-  }, [height, isDense, plotLeft, width]);
+  }, [height, isDense, plotLeft, width, targetAspectRatio]);
 
   return (
     <div
@@ -291,6 +294,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
         ref={scrollViewportRef}
         className="upset-scroll-viewport"
         onScroll={(event) => {
+          if (isDense && frozenLaneRef.current) frozenLaneRef.current.style.top = `${-event.currentTarget.scrollTop}px`;
           const minimumScrollLeft = minimumMobileScrollLeftRef.current;
           if (event.currentTarget.scrollLeft < minimumScrollLeft) {
             event.currentTarget.scrollLeft = minimumScrollLeft;
@@ -320,7 +324,11 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
           data-value-label-layout={denseLabelsAreAngled ? 'angled' : 'horizontal'}
           data-export-content-top={Math.max(0, INTERSECTION_TITLE_Y - axisTitleFontSize)}
           data-export-content-bottom={matrixBottom + 8}
-          style={minViewportWidth ? { minWidth: `${minViewportWidth}px` } : undefined}
+          style={minViewportWidth ? {
+            width: `${Math.ceil(figureViewBox[2] * UPSET_MIN_RENDER_SCALE)}px`, minWidth: `${Math.ceil(figureViewBox[2] * UPSET_MIN_RENDER_SCALE)}px`,
+            height: `${Math.ceil(figureViewBox[3] * UPSET_MIN_RENDER_SCALE)}px`, minHeight: `${Math.ceil(figureViewBox[3] * UPSET_MIN_RENDER_SCALE)}px`,
+            flex: '0 0 auto', alignSelf: 'flex-start',
+          } : undefined}
         >
           <title id="upset-title">{sets.length}-set UpSet plot</title>
           <desc id="upset-description">
@@ -403,6 +411,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
                   role={region.count > 0 ? 'button' : undefined}
                   tabIndex={region.count > 0 ? 0 : -1}
                   aria-label={`${region.key}，${region.count} 个成员`}
+                  aria-pressed={selectedMask === region.mask}
                   onClick={() => region.count > 0 && onSelectRegion(region.mask)}
                   onKeyDown={(event) => {
                     if (region.count > 0 && (event.key === 'Enter' || event.key === ' ')) {
@@ -412,6 +421,13 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
                   }}
                 >
                   <title>{`${region.key}: ${region.count}`}</title>
+                  {selectedMask === region.mask ? (
+                    <rect data-export-ignore="true" data-selection-column="true"
+                      x={x - columnStep / 2 + 1} y={barTop - 8}
+                      width={columnStep - 2} height={matrixBottom - barTop + 24}
+                      fill="#3979ad" fillOpacity={0.13} stroke="#3979ad" strokeWidth={1}
+                      pointerEvents="none" />
+                  ) : null}
                   <rect
                     className="upset-intersection-bar"
                     x={x - barWidth / 2}
@@ -482,7 +498,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
             valueFontWeight={valueFontWeight}
           />
 
-          <g className="upset-matrix">
+          <g className="upset-matrix" pointerEvents="none">
             {visibleRegions.map((region, columnIndex) => {
               if (region.setIndices.length < 2) return null;
               const x = plotLeft + columnStep * columnIndex + columnStep / 2;
@@ -527,7 +543,7 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
             data-export-ignore="true"
             style={{ fontSize: noteFontSize, fontWeight: labelFontWeight }}
           >
-            {`Showing ${visibleActual} of ${totalActual} observed intersections`}
+            {`Showing ${visibleActual} of ${totalActual} observed intersections${selectedMask && !visibleRegions.some((r) => r.mask === selectedMask) ? ' · Selected region is outside Top N' : ''}`}
           </text>
         </svg>
       </div>
@@ -541,12 +557,12 @@ export const UpSetChart = forwardRef<SVGSVGElement, UpSetChartProps>(function Up
       <svg
         ref={frozenLaneRef}
         className="upset-frozen-lane"
-        viewBox={`0 0 ${plotLeft} ${height}`}
+        viewBox={`0 0 ${plotLeft} ${figureViewBox[3]}`}
         preserveAspectRatio="none"
         aria-hidden="true"
         focusable="false"
       >
-        <rect width={plotLeft} height={height} fill="#ffffff" />
+        <rect width={plotLeft} height={figureViewBox[3]} fill="#ffffff" />
         {isDense ? (
           <text
             x={22}

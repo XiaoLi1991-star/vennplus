@@ -36,22 +36,17 @@ export function useSetAnalysis(sets: SetDefinition[]): {
     () => (useWorker ? null : analyzeSets(sets)),
     [sets, useWorker],
   );
-  const lastAnalysisRef = useRef<SetAnalysis>(synchronousAnalysis ?? analyzeSets([]));
-  if (synchronousAnalysis) lastAnalysisRef.current = synchronousAnalysis;
-
-  const [workerAnalysis, setWorkerAnalysis] = useState<SetAnalysis | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [workerResult, setWorkerResult] = useState<{ sets: SetDefinition[]; analysis: SetAnalysis } | null>(null);
+  const pendingAnalysis = useMemo(() => useWorker ? analyzeSets(sets.map((set) => ({ ...set, text: '' }))) : null, [sets, useWorker]);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (!useWorker) {
-      setIsAnalyzing(false);
       return undefined;
     }
 
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    setIsAnalyzing(true);
     let worker: Worker | null = null;
     let cancelled = false;
 
@@ -59,9 +54,7 @@ export function useSetAnalysis(sets: SetDefinition[]): {
       window.setTimeout(() => {
         if (cancelled) return;
         const next = analyzeSets(sets);
-        lastAnalysisRef.current = next;
-        setWorkerAnalysis(next);
-        setIsAnalyzing(false);
+        setWorkerResult({ sets, analysis: next });
       }, 0);
     };
 
@@ -78,9 +71,7 @@ export function useSetAnalysis(sets: SetDefinition[]): {
         worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
           if (cancelled || event.data.requestId !== requestId) return;
           const next = normalizeWorkerAnalysis(event.data.analysis);
-          lastAnalysisRef.current = next;
-          setWorkerAnalysis(next);
-          setIsAnalyzing(false);
+          setWorkerResult({ sets, analysis: next });
           worker?.terminate();
           worker = null;
         };
@@ -103,7 +94,7 @@ export function useSetAnalysis(sets: SetDefinition[]): {
   }, [sets, useWorker]);
 
   return {
-    analysis: synchronousAnalysis ?? workerAnalysis ?? lastAnalysisRef.current,
-    isAnalyzing: useWorker && isAnalyzing,
+    analysis: synchronousAnalysis ?? (workerResult?.sets === sets ? workerResult.analysis : pendingAnalysis!),
+    isAnalyzing: useWorker && workerResult?.sets !== sets,
   };
 }

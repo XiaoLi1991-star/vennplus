@@ -7,7 +7,7 @@ import { VennChart } from '../src/components/VennChart';
 import { UpSetChart } from '../src/components/UpSetChart';
 import { cloneExample, DEFAULT_EXAMPLE, EXAMPLES } from '../src/data/examples';
 import { DEFAULT_FIGURE_STYLE } from '../src/data/figureStyle';
-import { analyzeSets } from '../src/lib/sets';
+import { analyzeSets, describeRegion } from '../src/lib/sets';
 import {
   createRegionFilename,
   createSetsTsv,
@@ -150,13 +150,13 @@ describe('vector figure export', () => {
     expect(exported.markup).toMatch(
       /class="upset-value-label"[^>]+style="[^"]*font-size: 13\.2px;[^"]*font-weight: 700/,
     );
-    expect(exported.markup).toContain('data-export-upset-vertical-scale');
+    expect(exported.markup).not.toContain('data-export-upset-vertical-scale');
     const matrixBottom = Math.max(
       ...[...exported.markup.matchAll(/<circle[^>]+cy="([^"]+)"/g)].map((match) =>
         Number(match[1]),
       ),
     );
-    expect(matrixBottom / exportedViewBox![3]).toBeGreaterThan(0.85);
+    expect(matrixBottom).toBe(Number(ref.current!.getAttribute('data-matrix-bottom')));
   });
 
   it('preserves compact three-set column spacing and centers it on the export canvas', () => {
@@ -247,11 +247,11 @@ describe('selected-region filenames', () => {
     };
     const filename = createRegionFilename(longRegion, 'vennplus-figure', 'csv');
     expect(new TextEncoder().encode(filename).length).toBeLessThanOrEqual(180);
-    expect(filename).toBe('vennplus-figure-intersection-255-8sets.csv');
+    expect(filename).toBe('vennplus-figure-intersection-255-8sets-exact.csv');
 
     const unicodeFilename = createRegionFilename(longRegion, '超长科研项目名称'.repeat(20), 'txt');
     expect(new TextEncoder().encode(unicodeFilename).length).toBeLessThanOrEqual(120);
-    expect(unicodeFilename).toContain('-intersection-255-8sets.txt');
+    expect(unicodeFilename).toContain('-intersection-255-8sets-exact.txt');
   });
 });
 
@@ -274,7 +274,7 @@ describe('tab-separated set export', () => {
       .filter((region) => region.count > 0)
       .sort((a, b) => b.count - a.count || b.setIndices.length - a.setIndices.length || a.mask - b.mask);
 
-    expect(rows[0].split('\t')).toEqual(regions.map((region) => region.key));
+    expect(rows[0].split('\t')).toEqual(regions.map(describeRegion));
     expect(rows).toHaveLength(Math.max(...regions.map((region) => region.count)) + 1);
     expect(rows[1].split('\t')).toHaveLength(regions.length);
   });

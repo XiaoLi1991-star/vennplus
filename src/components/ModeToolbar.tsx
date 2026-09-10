@@ -32,6 +32,7 @@ export function ModeToolbar({ mode, setCount, onModeChange }: ModeToolbarProps) 
             <button
               key={item.id}
               className={mode === item.id ? 'is-active' : ''}
+              aria-pressed={mode === item.id}
               type="button"
               disabled={disabled}
               title={disabled ? `当前 ${setCount} 组不建议使用此模式` : undefined}

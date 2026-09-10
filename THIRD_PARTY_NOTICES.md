@@ -1,5 +1,14 @@
 # Third-party notices
 
+## Noto Sans SC
+
+PDF Unicode text uses Noto Sans SC from the Noto CJK project, distributed under
+the SIL Open Font License 1.1. Source:
+https://github.com/notofonts/noto-cjk/tree/main/Sans/Variable/TTF/Subset
+The complete license is included at `public/fonts/OFL.txt`.
+The font is served locally, loaded only when exporting PDF, and glyphs are
+embedded in the PDF; identifiers and set names are not sent to a font service.
+
 ## UTIF.js
 
 TIFF encoding uses UTIF.js 3.1.0 from Photopea.

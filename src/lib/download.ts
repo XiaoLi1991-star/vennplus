@@ -5,7 +5,7 @@ import {
 import { VENNPLUS_VERSION } from '../data/version';
 import type { PublicationSettings, Region, SetAnalysis, SetDefinition } from '../types';
 import type { PublicationManifest } from './publicationManifest';
-import { formatPercentage, getSetDisplayName } from './sets';
+import { describeRegion, formatPercentage, getSetDisplayName } from './sets';
 import { fitViewBoxToAspectRatio } from './viewBox';
 
 const EXPORT_STYLE = `
@@ -119,61 +119,13 @@ export function writePngDpi(png: Uint8Array, dpi: number): Uint8Array {
   return output;
 }
 
-function scaleSvgNumber(value: string | null, mapY: (value: number) => number): string | null {
-  if (value === null) return null;
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? String(mapY(numeric)) : null;
-}
-
-function reflowUpSetClone(clone: SVGSVGElement, targetAspectRatio: number): void {
-  if (clone.getAttribute('data-figure') !== 'upset') return;
-  const sourceViewBox = clone.viewBox.baseVal;
-  const targetHeight = sourceViewBox.width / targetAspectRatio;
-  if (!Number.isFinite(targetHeight) || targetHeight <= sourceViewBox.height * 1.02) return;
-
-  const sourceContentTop = Number(clone.getAttribute('data-export-content-top'));
-  const sourceContentBottom = Number(clone.getAttribute('data-export-content-bottom'));
-  if (
-    !Number.isFinite(sourceContentTop) ||
-    !Number.isFinite(sourceContentBottom) ||
-    sourceContentBottom <= sourceContentTop
-  ) return;
-
-  const targetPadding = Math.max(18, targetHeight * 0.035);
-  const verticalScale =
-    (targetHeight - targetPadding * 2) / (sourceContentBottom - sourceContentTop);
-  const mapY = (value: number) =>
-    targetPadding + (value - sourceContentTop) * verticalScale;
-
-  clone.querySelectorAll<SVGElement>('[y], [y1], [y2], [cy]').forEach((node) => {
-    for (const attribute of ['y', 'y1', 'y2', 'cy']) {
-      const scaled = scaleSvgNumber(node.getAttribute(attribute), mapY);
-      if (scaled !== null) node.setAttribute(attribute, scaled);
-    }
-  });
-  clone.querySelectorAll<SVGElement>('rect[height]').forEach((node) => {
-    const height = Number(node.getAttribute('height'));
-    if (Number.isFinite(height)) node.setAttribute('height', String(height * verticalScale));
-  });
-  clone.querySelectorAll<SVGElement>('[transform^="rotate("]').forEach((node) => {
-    const transform = node.getAttribute('transform');
-    const match = transform?.match(/^rotate\(([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\)$/);
-    if (!match) return;
-    node.setAttribute('transform', `rotate(${match[1]} ${match[2]} ${mapY(Number(match[3]))})`);
-  });
-
-  clone.setAttribute(
-    'viewBox',
-    [sourceViewBox.x, sourceViewBox.y, sourceViewBox.width, targetHeight].join(' '),
-  );
-  clone.setAttribute('data-export-upset-vertical-scale', verticalScale.toFixed(4));
-}
-
 function createExportClone(
   svg: SVGSVGElement,
   publication: PublicationSettings = DEFAULT_PUBLICATION_SETTINGS,
 ): SVGSVGElement {
   const clone = svg.cloneNode(true) as SVGSVGElement;
+  // Preview zoom/scroll dimensions must not override physical export attributes.
+  for (const property of ['width', 'height', 'min-width', 'min-height', 'max-width', 'max-height', 'flex', 'align-self']) clone.style.removeProperty(property);
   clone.querySelectorAll('[data-export-ignore]').forEach((node) => node.remove());
   clone.querySelectorAll('[role], [tabindex], [aria-label], [aria-pressed]').forEach((node) => {
     node.removeAttribute('role');
@@ -184,10 +136,9 @@ function createExportClone(
   clone.querySelectorAll('.region-is-selected, .region-is-muted').forEach((node) => {
     node.classList.remove('region-is-selected', 'region-is-muted');
   });
-  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  clone.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xlink', 'http://www.w3.org/1999/xlink');
   clone.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-  reflowUpSetClone(clone, publication.widthMm / publication.heightMm);
   const sourceViewBox = clone.viewBox.baseVal;
   const fittedViewBox = fitViewBoxToAspectRatio(
     [sourceViewBox.x, sourceViewBox.y, sourceViewBox.width, sourceViewBox.height],
@@ -331,6 +282,61 @@ export async function exportTiff(
   downloadBlob(new Blob([tiff], { type: 'image/tiff' }), `${slugify(projectTitle)}.tiff`);
 }
 
+const pdfFontPromises = new Map<string, Promise<string>>();
+
+async function loadPdfFont(weight: 'Regular' | 'Bold'): Promise<string> {
+  let promise = pdfFontPromises.get(weight);
+  if (promise) return promise;
+  promise = fetch(`${import.meta.env.BASE_URL}fonts/NotoSansSC-${weight}.ttf`)
+    .then(async (response) => {
+      if (!response.ok) throw new Error('PDF 字体加载失败');
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const face = new FontFace('VennPlusUnicode', bytes, { weight: weight === 'Bold' ? '700' : '400' });
+      document.fonts.add(await face.load());
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      return btoa(binary);
+    }).catch((error) => { pdfFontPromises.delete(weight); throw error; });
+  pdfFontPromises.set(weight, promise);
+  return promise;
+}
+
+/** svg2pdf does not implement non-scaling-stroke; resolve it in local units. */
+export async function preparePdfSvg(clone: SVGSVGElement, pdf: import('jspdf').jsPDF): Promise<void> {
+  for (const node of clone.querySelectorAll<SVGGraphicsElement>('*')) {
+    const style = getComputedStyle(node);
+    if (style.vectorEffect !== 'non-scaling-stroke') continue;
+    const matrix = node.getCTM();
+    if (!matrix) continue;
+    const scale = Math.sqrt(Math.abs(matrix.a * matrix.d - matrix.b * matrix.c));
+    if (scale > 0) {
+      const width = parseFloat(style.strokeWidth) * 0.75 / scale;
+      node.style.strokeWidth = String(width);
+      node.setAttribute('stroke-width', String(width));
+    }
+    node.style.vectorEffect = 'none';
+    node.removeAttribute('vector-effect');
+  }
+  // Register the same Unicode font for every SVG text run, including tspans.
+  // Load only on PDF export; jsPDF subsets glyphs in the resulting file.
+  const [regular, bold] = await Promise.all([loadPdfFont('Regular'), loadPdfFont('Bold')]);
+  pdf.addFileToVFS('NotoSansSC-Regular.ttf', regular);
+  pdf.addFileToVFS('NotoSansSC-Bold.ttf', bold);
+  pdf.addFont('NotoSansSC-Regular.ttf', 'VennPlusUnicode', 'normal');
+  pdf.addFont('NotoSansSC-Bold.ttf', 'VennPlusUnicode', 'bold');
+  for (const node of clone.querySelectorAll<SVGElement>('text, tspan')) {
+    const weight = getComputedStyle(node).fontWeight;
+    node.style.fontWeight = weight === 'bold' || parseFloat(weight) >= 600 ? 'bold' : 'normal';
+    node.setAttribute('font-weight', node.style.fontWeight);
+    node.style.fontStyle = 'normal';
+    node.setAttribute('font-style', 'normal');
+    node.style.setProperty('font-family', 'VennPlusUnicode', 'important');
+    node.setAttribute('font-family', 'VennPlusUnicode');
+  }
+}
+
 export async function exportPdf(
   svg: SVGSVGElement,
   projectTitle: string,
@@ -357,8 +363,10 @@ export async function exportPdf(
   clone.style.top = '0';
   clone.setAttribute('width', String(contentWidth));
   clone.setAttribute('height', String(contentHeight));
+  Object.assign(clone.style, { width: `${contentWidth}px`, height: `${contentHeight}px`, minWidth: '0', minHeight: '0', maxWidth: 'none', maxHeight: 'none' });
   document.body.append(clone);
   try {
+    await preparePdfSvg(clone, pdf);
     await svg2pdf(clone, pdf, { x: 0, y: 0, width: contentWidth, height: contentHeight });
     pdf.save(`${slugify(projectTitle)}.pdf`);
   } finally {
@@ -379,7 +387,7 @@ export function exportRegionTxt(region: Region, projectTitle: string): void {
 }
 
 export function exportRegionCsv(region: Region, projectTitle: string): void {
-  const rows = [['Region', 'Member'], ...region.members.map((member) => [region.key, member])];
+  const rows = [['Region', 'Member', 'Membership'], ...region.members.map((member) => [region.key, member, describeRegion(region)])];
   const csv = `\uFEFF${rows.map((row) => row.map(csvEscape).join(',')).join('\r\n')}\r\n`;
   downloadBlob(
     new Blob([csv], { type: 'text/csv;charset=utf-8' }),
@@ -393,7 +401,8 @@ export function createRegionFilename(
   extension: 'txt' | 'csv',
 ): string {
   const projectSlug = slugify(projectTitle);
-  const descriptive = `${projectSlug}-${slugify(region.key)}.${extension}`;
+  const scope = region.membershipMode === 'inclusive' ? 'inclusive' : 'exact';
+  const descriptive = `${projectSlug}-${slugify(region.key)}-${scope}.${extension}`;
   if (new TextEncoder().encode(descriptive).length <= 180) return descriptive;
   let boundedProjectSlug = '';
   for (const character of projectSlug) {
@@ -402,7 +411,7 @@ export function createRegionFilename(
     boundedProjectSlug = candidate;
   }
   boundedProjectSlug = boundedProjectSlug.replace(/[-._]+$/g, '') || 'vennplus';
-  return `${boundedProjectSlug}-intersection-${region.mask}-${region.setIndices.length}sets.${extension}`;
+  return `${boundedProjectSlug}-intersection-${region.mask}-${region.setIndices.length}sets-${scope}.${extension}`;
 }
 
 export function exportIntersectionsCsv(
@@ -410,11 +419,11 @@ export function exportIntersectionsCsv(
   projectTitle: string,
 ): void {
   const rows: Array<Array<string | number>> = [
-    ['Region', 'Set degree', 'Count', 'Percentage of union'],
+    ['Region', 'Set degree', 'Count', 'Percentage of union', 'Membership'],
     ...analysis.regions
       .filter((region) => region.count > 0)
       .sort((a, b) => b.count - a.count || a.mask - b.mask)
-      .map((region) => [region.key, region.setIndices.length, region.count, formatPercentage(region.percentage)]),
+      .map((region) => [region.key, region.setIndices.length, region.count, formatPercentage(region.percentage), describeRegion(region)]),
   ];
   const csv = `\uFEFF${rows.map((row) => row.map(csvEscape).join(',')).join('\r\n')}\r\n`;
   downloadBlob(
@@ -455,7 +464,7 @@ export function createIntersectionsTsv(analysis: SetAnalysis): string {
     .sort((a, b) => b.count - a.count || b.setIndices.length - a.setIndices.length || a.mask - b.mask);
   const rowCount = Math.max(0, ...regions.map((region) => region.members.length));
   const rows = [
-    regions.map((region) => region.key),
+    regions.map(describeRegion),
     ...Array.from({ length: rowCount }, (_, rowIndex) =>
       regions.map((region) => region.members[rowIndex] ?? ''),
     ),
@@ -514,6 +523,7 @@ export function createWorkbookSheets(
       headerCell('Set degree'),
       headerCell('Count'),
       headerCell('Percentage of union'),
+      headerCell('Membership'),
     ],
     ...analysis.regions
       .filter((region) => region.count > 0)
@@ -523,12 +533,13 @@ export function createWorkbookSheets(
         region.setIndices.length,
         region.count,
         { value: region.percentage, format: '0.0%' },
+        describeRegion(region),
       ]),
   ];
   const membersLong = [
-    [headerCell('Region'), headerCell('Set degree'), headerCell('Member')],
+    [headerCell('Region'), headerCell('Set degree'), headerCell('Member'), headerCell('Membership')],
     ...analysis.regions.flatMap((region) =>
-      region.members.map((member) => [region.key, region.setIndices.length, member]),
+      region.members.map((member) => [region.key, region.setIndices.length, member, describeRegion(region)]),
     ),
   ];
 
