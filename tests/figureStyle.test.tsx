@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { VennChart } from '../src/components/VennChart';
-import { cloneExample, DEFAULT_EXAMPLE, EXAMPLES } from '../src/data/examples';
+import { cloneExample, EXAMPLES } from '../src/data/examples';
 import {
   DEFAULT_FIGURE_STYLE,
   hasFigureFill,
@@ -9,7 +9,7 @@ import {
 } from '../src/data/figureStyle';
 import { analyzeSets } from '../src/lib/sets';
 
-const sets = cloneExample(DEFAULT_EXAMPLE);
+const sets = cloneExample(EXAMPLES.find((example) => example.id === 'four-biomarkers')!);
 const analysis = analyzeSets(sets);
 const display = {
   regionLabelMode: 'count' as const,

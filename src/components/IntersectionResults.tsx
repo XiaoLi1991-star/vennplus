@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { Region, SetAnalysis, SetDefinition } from '../types';
 import { getSetDisplayName } from '../lib/sets';
 import { ChevronDown, ChevronUp, Maximize2, Minimize2 } from 'lucide-react';
@@ -14,7 +14,12 @@ interface Props {
   onDownloadCsv: (region: Region) => void;
 }
 
-export function IntersectionResults({ sets, analysis, region, onSelect, onClear, onDownloadTxt, onDownloadCsv }: Props) {
+export interface IntersectionResultsHandle { showAll: () => void }
+
+export const IntersectionResults = forwardRef<IntersectionResultsHandle, Props>(function IntersectionResults({ sets, analysis, region, onSelect, onClear, onDownloadTxt, onDownloadCsv }, ref) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const focusAllRef = useRef(false);
   const [tab, setTab] = useState<'members' | 'all'>('members');
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState('');
@@ -22,6 +27,20 @@ export function IntersectionResults({ sets, analysis, region, onSelect, onClear,
   const [height, setHeight] = useState(260);
   const [collapsed, setCollapsed] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  useImperativeHandle(ref, () => ({ showAll: () => {
+    setTab('all'); setCollapsed(false); setExpanded(true);
+    setQuery(''); setGroup(''); setPage(0);
+    focusAllRef.current = true;
+    // Also focus when the complete table was already open and state is unchanged.
+    searchRef.current?.focus({ preventScroll: true });
+    sectionRef.current?.scrollIntoView?.({ block: 'nearest' });
+  } }), []);
+  useEffect(() => {
+    if (!focusAllRef.current) return;
+    focusAllRef.current = false;
+    searchRef.current?.focus({ preventScroll: true });
+    sectionRef.current?.scrollIntoView?.({ block: 'nearest' });
+  });
   useEffect(() => { if (region) { setTab('members'); setCollapsed(false); } }, [region?.mask, region?.key]);
   const rows = useMemo(() => {
     const q = query.trim().toLocaleLowerCase();
@@ -33,7 +52,7 @@ export function IntersectionResults({ sets, analysis, region, onSelect, onClear,
   const lastPage = Math.max(0, Math.ceil(rows.length / 50) - 1);
   const currentPage = Math.min(page, lastPage);
   const compact = !region && tab === 'members';
-  return <section className={`intersection-results ${compact ? 'is-compact' : ''} ${collapsed ? 'is-collapsed' : ''} ${expanded && !collapsed ? 'is-expanded-results' : ''}`} style={{ height: collapsed ? 48 : expanded ? 'min(65dvh, 560px)' : compact ? 114 : height }}>
+  return <section ref={sectionRef} className={`intersection-results ${compact ? 'is-compact' : ''} ${collapsed ? 'is-collapsed' : ''} ${expanded && !collapsed ? 'is-expanded-results' : ''}`} style={{ height: collapsed ? 48 : expanded ? 'min(65dvh, 560px)' : compact ? 114 : height }}>
     <div className="results-resizer" role="separator" aria-label="调整结果区高度" aria-orientation="horizontal"
       aria-valuemin={190} aria-valuemax={500} aria-valuenow={height} tabIndex={0}
       onKeyDown={(e) => { if (['ArrowUp', 'ArrowDown'].includes(e.key)) { e.preventDefault(); setHeight((h) => Math.max(190, Math.min(500, h + (e.key === 'ArrowUp' ? 20 : -20)))); } }}
@@ -57,7 +76,7 @@ export function IntersectionResults({ sets, analysis, region, onSelect, onClear,
     {tab === 'members' ? <SelectedRegionPanel region={region} analysis={analysis} onClearSelection={onClear} onDownloadTxt={onDownloadTxt} onDownloadCsv={onDownloadCsv} /> :
       <div className="all-intersections">
         <div className="intersection-filters">
-          <input type="search" aria-label="搜索全部交集" placeholder="搜索组名或成员" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} />
+          <input ref={searchRef} type="search" aria-label="搜索全部交集" placeholder="搜索组名或成员" value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} />
           <select aria-label="按组筛选交集" value={sets.some((set) => set.id === group) ? group : ''} onChange={(e) => { setGroup(e.target.value); setPage(0); }}>
             <option value="">全部组</option>{sets.map((set, i) => <option key={set.id} value={set.id}>包含 {getSetDisplayName(set, i)}</option>)}
           </select>
@@ -77,4 +96,4 @@ export function IntersectionResults({ sets, analysis, region, onSelect, onClear,
       </div>}
     </div>
   </section>;
-}
+});

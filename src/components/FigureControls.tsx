@@ -316,15 +316,19 @@ export function FigureControls({
 
           {fillEnabled ? (
             <SliderControl
-              label="透明度"
+              label="不透明度"
               value={figureStyle.fillOpacity}
               min={0}
               max={1}
-              step={0.05}
+              step={0.01}
               output={`${Math.round(figureStyle.fillOpacity * 100)}%`}
               onChange={(fillOpacity) => onFigureStyleChange({ fillOpacity })}
             />
           ) : null}
+
+          {fillEnabled ? <p className="control-help">0% 无填充，100% 实色。
+            {figureStyle.fillOpacity === 0 ? '当前填充不可见，请提高不透明度。' : null}
+          </p> : null}
 
           {hasVisibleFill ? (
             <label className="compact-select-control border-color-control">

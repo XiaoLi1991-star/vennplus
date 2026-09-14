@@ -5,6 +5,7 @@ interface ModeToolbarProps {
   mode: ViewMode;
   setCount: number;
   onModeChange: (mode: ViewMode) => void;
+  descriptionId?: string;
 }
 
 const MODES: Array<{ id: ViewMode; label: string }> = [
@@ -13,17 +14,10 @@ const MODES: Array<{ id: ViewMode; label: string }> = [
   { id: 'upset', label: 'UpSet' },
 ];
 
-export function ModeToolbar({ mode, setCount, onModeChange }: ModeToolbarProps) {
-  const recommendation =
-    setCount >= 6
-      ? `${setCount}组推荐 UpSet`
-      : setCount === 5
-        ? '五组 Venn 建议双栏，UpSet 作为备选'
-        : '经典集合交集';
-
+export function ModeToolbar({ mode, setCount, onModeChange, descriptionId }: ModeToolbarProps) {
   return (
     <div className="mode-toolbar">
-      <div className="segmented-control" aria-label="图形模式">
+      <div className="segmented-control" role="group" aria-label="图形模式" aria-describedby={descriptionId}>
         {MODES.map((item) => {
           const disabled =
             (item.id === 'euler' && setCount > MAX_EULER_SET_COUNT) ||
@@ -35,7 +29,8 @@ export function ModeToolbar({ mode, setCount, onModeChange }: ModeToolbarProps) 
               aria-pressed={mode === item.id}
               type="button"
               disabled={disabled}
-              title={disabled ? `当前 ${setCount} 组不建议使用此模式` : undefined}
+              aria-describedby={descriptionId}
+              title={disabled ? `当前 ${setCount} 组超出本工具 ${item.label} 的支持范围（2–${item.id === 'venn' ? MAX_VENN_SET_COUNT : MAX_EULER_SET_COUNT} 组），请使用 UpSet` : undefined}
               onClick={() => onModeChange(item.id)}
             >
               {item.label}
@@ -43,7 +38,19 @@ export function ModeToolbar({ mode, setCount, onModeChange }: ModeToolbarProps) 
           );
         })}
       </div>
-      <span className="mode-recommendation">{recommendation}</span>
     </div>
   );
+}
+
+export function ModeGuidance({ mode, setCount, id, modeNotice }: {
+  mode: ViewMode; setCount: number; id: string; modeNotice?: string;
+}) {
+  return <div className="mode-guidance" id={id} aria-live="polite">
+    {modeNotice ? <p className="mode-switch-reason">{modeNotice}</p> : null}
+    <p>当前 {setCount} 个集合，使用 {MODES.find((item) => item.id === mode)?.label}。
+      本工具 Venn 支持 2–{MAX_VENN_SET_COUNT} 组，Euler 支持 2–{MAX_EULER_SET_COUNT} 组。
+      {setCount > MAX_VENN_SET_COUNT ? '当前组数仅支持 UpSet。' : setCount === MAX_VENN_SET_COUNT ? '五组 Venn 可用但较拥挤，建议双栏尺寸或改用 UpSet。Euler 不可用。' : null}
+    </p>
+    {mode === 'euler' ? <p>Euler 圆形面积为近似拟合，图下列出最大区域误差。精确比较请以交集数值为准，也可切换 UpSet。</p> : mode === 'venn' ? <p>Venn 展示集合交叠关系，区域面积不代表成员数量。</p> : null}
+  </div>;
 }

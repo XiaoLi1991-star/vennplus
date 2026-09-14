@@ -63,7 +63,7 @@ describe('simplified figure controls', () => {
       figureStyle: { ...DEFAULT_FIGURE_STYLE, fillMode: 'outline' },
     });
 
-    expect(screen.queryByLabelText('透明度')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('不透明度')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('边框颜色模式')).not.toBeInTheDocument();
     expect(screen.getByLabelText('线宽')).toBeInTheDocument();
   });
@@ -73,7 +73,8 @@ describe('simplified figure controls', () => {
       figureStyle: { ...DEFAULT_FIGURE_STYLE, fillOpacity: 0 },
     });
 
-    expect(screen.getByLabelText('透明度')).toBeInTheDocument();
+    expect(screen.getByLabelText('不透明度')).toBeInTheDocument();
+    expect(screen.getByText(/当前填充不可见/)).toBeInTheDocument();
     expect(screen.queryByLabelText('边框颜色模式')).not.toBeInTheDocument();
   });
 
@@ -100,6 +101,7 @@ describe('style-only inspector', () => {
   it('keeps figure controls and font metrics separate from export actions', () => {
     render(
       <InspectorPanel
+        onResetStyle={() => undefined}
         mode="venn"
         display={display}
         figureStyle={DEFAULT_FIGURE_STYLE}

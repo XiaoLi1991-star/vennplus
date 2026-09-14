@@ -119,5 +119,7 @@ export function useWorkspaceHistory({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [enabled, redo, undo]);
 
-  return { ...availability, undo, redo };
+  // Discrete actions must not merge into a preceding typing/slider edit.
+  const checkpoint = useCallback(() => { lastRecordedAtRef.current = 0; }, []);
+  return { ...availability, undo, redo, checkpoint };
 }

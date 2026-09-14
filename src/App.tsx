@@ -67,6 +67,7 @@ function App() {
   );
   const projectTitle = PROJECT_TITLE;
   const [mode, setMode] = useState<ViewMode>(DEFAULT_EXAMPLE.defaultMode);
+  const [modeNotice, setModeNotice] = useState<{ count: number; message: string } | null>(null);
   const [display, setDisplay] = useState<DisplayOptions>(DEFAULT_DISPLAY);
   const [figureStyle, setFigureStyle] = useState<FigureStyleOptions>(DEFAULT_FIGURE_STYLE);
   const [setLabelPositions, setSetLabelPositions] = useState<
@@ -87,6 +88,7 @@ function App() {
   const figureRef = useRef<SVGSVGElement>(null);
   const dirtyDraftRef = useRef(false);
   const saveSequenceRef = useRef(0);
+  const noticeTimerRef = useRef<number | undefined>(undefined);
 
   const { analysis, isAnalyzing } = useSetAnalysis(sets);
   const selectedRegion = useMemo(() => {
@@ -96,9 +98,11 @@ function App() {
   }, [analysis, selectedMask]);
 
   const showNotice = (type: 'success' | 'error', message: string) => {
+    window.clearTimeout(noticeTimerRef.current);
     setNotice({ type, message });
-    window.setTimeout(() => setNotice(null), 2400);
+    noticeTimerRef.current = window.setTimeout(() => setNotice(null), 5000);
   };
+  useEffect(() => () => window.clearTimeout(noticeTimerRef.current), []);
 
   const workspaceState = useMemo<WorkspaceState>(
     () => ({
@@ -130,6 +134,9 @@ function App() {
   );
 
   const applyWorkspaceState = (next: WorkspaceState) => {
+    setModeNotice(null);
+    window.clearTimeout(noticeTimerRef.current);
+    setNotice(null);
     setSets(next.sets);
     setMode(next.mode);
     setDisplay(next.display);
@@ -212,30 +219,40 @@ function App() {
     setSets((current) => current.map((set) => (set.id === id ? { ...set, ...patch } : set)));
   };
 
+  const adjustModeForSetCount = (count: number, action: string) => {
+    const limit = mode === 'euler' ? MAX_EULER_SET_COUNT : MAX_VENN_SET_COUNT;
+    if (mode !== 'upset' && count > limit) {
+      const message = `${action}后共有 ${count} 个集合，超过 ${mode === 'euler' ? 'Euler' : 'Venn'} 的 ${limit} 组上限，已自动切换为 UpSet。`;
+      setMode('upset');
+      setModeNotice({ count, message });
+      return message;
+    }
+    setModeNotice(null);
+    return '';
+  };
+
   const addSet = () => {
+    if (sets.length >= MAX_SET_COUNT) return;
+    history.checkpoint();
+    const nextIndex = sets.length;
+    const next = [
+      ...sets,
+      {
+        id: createSetId(),
+        name: uniqueSetName(`Group ${String.fromCharCode(65 + nextIndex)}`, sets),
+        color: nextSetColor(sets, (PALETTES.find((palette) => palette.id === paletteId) ?? DEFAULT_PALETTE).colors),
+        text: '',
+      },
+    ];
+    setSets(next);
     setSetLabelPositions({ venn: {}, euler: {} });
-    setSets((current) => {
-      if (current.length >= MAX_SET_COUNT) return current;
-      const nextIndex = current.length;
-      const next = [
-        ...current,
-        {
-          id: createSetId(),
-          name: uniqueSetName(`Group ${String.fromCharCode(65 + nextIndex)}`, current),
-          color: nextSetColor(current, (PALETTES.find((palette) => palette.id === paletteId) ?? DEFAULT_PALETTE).colors),
-          text: '',
-        },
-      ];
-      setExpandedSetId(next[next.length - 1].id);
-      if (
-        next.length > MAX_VENN_SET_COUNT ||
-        (mode === 'euler' && next.length > MAX_EULER_SET_COUNT)
-      ) setMode('upset');
-      return next;
-    });
+    setExpandedSetId(next[next.length - 1].id);
+    adjustModeForSetCount(next.length, '添加集合');
   };
 
   const removeSet = (id: string) => {
+    history.checkpoint();
+    setModeNotice(null);
     setSelectedMask(0);
     setSetLabelPositions({ venn: {}, euler: {} });
     setSets((current) => {
@@ -247,30 +264,27 @@ function App() {
   };
 
   const duplicateSet = (id: string) => {
+    if (sets.length >= MAX_SET_COUNT) return;
+    const source = sets.find((set) => set.id === id);
+    if (!source) return;
+    history.checkpoint();
     setSetLabelPositions({ venn: {}, euler: {} });
-    setSets((current) => {
-      if (current.length >= MAX_SET_COUNT) return current;
-      const source = current.find((set) => set.id === id);
-      if (!source) return current;
-      const nextIndex = current.length;
-      const duplicate = {
-        ...source,
-        id: createSetId(),
-        name: uniqueSetName(`${source.name} copy`, current),
-        color: nextSetColor(current, (PALETTES.find((palette) => palette.id === paletteId) ?? DEFAULT_PALETTE).colors),
-      };
-      setExpandedSetId(duplicate.id);
-      if (
-        nextIndex + 1 > MAX_VENN_SET_COUNT ||
-        (mode === 'euler' && nextIndex + 1 > MAX_EULER_SET_COUNT)
-      ) setMode('upset');
-      return [...current, duplicate];
-    });
+    const duplicate = {
+      ...source,
+      id: createSetId(),
+      name: uniqueSetName(`${source.name} copy`, sets),
+      color: nextSetColor(sets, (PALETTES.find((palette) => palette.id === paletteId) ?? DEFAULT_PALETTE).colors),
+    };
+    setExpandedSetId(duplicate.id);
+    setSets([...sets, duplicate]);
+    adjustModeForSetCount(sets.length + 1, '复制集合');
   };
 
   const loadExample = (exampleId: string) => {
     const example = EXAMPLES.find((item) => item.id === exampleId);
     if (!example) return;
+    history.checkpoint();
+    setModeNotice(null);
     const next = cloneExample(example).map((set, index) => ({
       ...set,
       color: (PALETTES.find((palette) => palette.id === paletteId) ?? DEFAULT_PALETTE).colors[index],
@@ -280,7 +294,7 @@ function App() {
     setMode(example.defaultMode);
     setSetLabelPositions({ venn: {}, euler: {} });
     setSelectedMask(0);
-    showNotice('success', `已加载${example.name}`);
+    showNotice('success', `已加载${example.name}；保留当前样式，可撤销恢复原数据。`);
   };
 
   const changePalette = (id: string) => {
@@ -288,6 +302,15 @@ function App() {
     if (!palette) return;
     setPaletteId(id);
     setSets((current) => current.map((set, index) => ({ ...set, color: palette.colors[index] })));
+  };
+
+  const resetStyle = () => {
+    history.checkpoint();
+    setFigureStyle({ ...DEFAULT_FIGURE_STYLE });
+    setDisplay({ ...DEFAULT_DISPLAY });
+    setSetLabelPositions({ venn: {}, euler: {} });
+    changePalette(DEFAULT_PALETTE.id);
+    showNotice('success', '已恢复默认彩色填充、配色与文字样式；数据和导出设置未改变，可撤销。');
   };
 
   const runExport = async (task: (svg: SVGSVGElement) => void | Promise<void>, success: string) => {
@@ -420,14 +443,15 @@ function App() {
           onRemoveSet={removeSet}
           onDuplicateSet={duplicateSet}
           onImportSets={(items) => {
+            history.checkpoint();
             const palette = PALETTES.find((item) => item.id === paletteId) ?? DEFAULT_PALETTE;
             const imported = items.map((item, i) => ({ ...item, id: createSetId(), color: palette.colors[i] }));
             setSets(imported);
             setExpandedSetId(imported[0].id);
             setSelectedMask(0);
             setSetLabelPositions({ venn: {}, euler: {} });
-            if (imported.length > (mode === 'euler' ? MAX_EULER_SET_COUNT : MAX_VENN_SET_COUNT)) setMode('upset');
-            showNotice('success', `已导入 ${imported.length} 个集合，可撤销恢复原数据`);
+            const reason = adjustModeForSetCount(imported.length, '导入');
+            showNotice('success', reason || `已导入 ${imported.length} 个集合，可撤销恢复原数据`);
           }}
         /> : null}
         <FigurePanel
@@ -436,6 +460,7 @@ function App() {
           analysis={analysis}
           isAnalyzing={isAnalyzing}
           mode={mode}
+          modeNotice={mode === 'upset' && modeNotice?.count === sets.length ? modeNotice.message : undefined}
           display={display}
           figureStyle={figureStyle}
           publication={publication}
@@ -446,7 +471,7 @@ function App() {
           inputCollapsed={inputCollapsed}
           inspectorCollapsed={inspectorCollapsed}
           isPresentationPreview={isPresentationPreview}
-          onModeChange={setMode}
+          onModeChange={(next) => { setModeNotice(null); setMode(next); }}
           onSelectRegion={selectRegion}
           onClearSelection={() => setSelectedMask(0)}
           onSetLabelPositionChange={updateSetLabelPosition}
@@ -464,6 +489,7 @@ function App() {
         />
         {!inspectorCollapsed ? (
           <InspectorPanel
+            onResetStyle={resetStyle}
             mode={mode}
             display={display}
             figureStyle={figureStyle}

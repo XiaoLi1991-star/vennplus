@@ -20,7 +20,7 @@ import {
 
 describe('vector figure export', () => {
   it('serializes the scientific layer without hit targets or browser state', () => {
-    const sets = cloneExample(DEFAULT_EXAMPLE);
+    const sets = cloneExample(EXAMPLES.find((example) => example.id === 'four-biomarkers')!);
     const analysis = analyzeSets(sets);
     const ref = createRef<SVGSVGElement>();
     render(

@@ -41,7 +41,7 @@ export function AppHeader(props: AppHeaderProps) {
       <button type="button" aria-label="撤销" title="撤销（⌘/Ctrl + Z）" disabled={!canUndo} onClick={onUndo}><Undo2 size={17} /></button>
       <button type="button" aria-label="重做" title="重做（⌘/Ctrl + Shift + Z）" disabled={!canRedo} onClick={onRedo}><Redo2 size={17} /></button>
     </div>
-    <label className="example-picker"><span>示例</span><select aria-label="示例" value="" onChange={(e) => { if (e.target.value) onLoadExample(e.target.value); }}>
+    <label className="example-picker" title="加载示例会替换数据并选择推荐图形，保留当前样式；可撤销"><span>示例</span><select aria-label="示例" value="" onChange={(e) => { if (e.target.value) onLoadExample(e.target.value); }}>
       <option value="" disabled>选择组数示例</option>{examples.map((example) => <option key={example.id} value={example.id}>{example.name}</option>)}
     </select></label>
     <div className={`local-status local-status-${saveStatus}`} title="输入不会上传；草稿自动保存在当前浏览器" aria-live="polite"><ShieldCheck size={17} /><span>{statusText}</span></div>

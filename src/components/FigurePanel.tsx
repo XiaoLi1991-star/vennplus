@@ -1,4 +1,4 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import type {
   DisplayOptions,
@@ -12,7 +12,7 @@ import type {
 } from '../types';
 import { EulerChart } from './EulerChart';
 import { PublicationToolbar } from './PublicationToolbar';
-import { IntersectionResults } from './IntersectionResults';
+import { IntersectionResults, type IntersectionResultsHandle } from './IntersectionResults';
 import { UpSetChart, type UpSetSort } from './UpSetChart';
 import { VennChart } from './VennChart';
 
@@ -21,6 +21,7 @@ interface FigurePanelProps {
   analysis: SetAnalysis;
   isAnalyzing: boolean;
   mode: ViewMode;
+  modeNotice?: string;
   display: DisplayOptions;
   figureStyle: FigureStyleOptions;
   publication: PublicationSettings;
@@ -48,6 +49,7 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
     analysis,
     isAnalyzing,
     mode,
+    modeNotice,
     display,
     figureStyle,
     publication,
@@ -71,6 +73,8 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
   ref,
 ) {
   const [zoomByMode, setZoomByMode] = useState({ venn: 1, euler: 1 });
+  const resultsRef = useRef<IntersectionResultsHandle>(null);
+  const intersectionCount = analysis.regions.length;
   const zoomableMode = mode === 'venn' || mode === 'euler' ? mode : null;
   const targetAspectRatio = publication.widthMm / publication.heightMm;
   const zoom = zoomableMode ? zoomByMode[zoomableMode] : 1;
@@ -118,6 +122,7 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
             </div>
           ) : null}
         mode={mode}
+        modeNotice={modeNotice}
         setCount={sets.length}
         inputCollapsed={inputCollapsed}
         inspectorCollapsed={inspectorCollapsed}
@@ -128,12 +133,20 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
         onTogglePresentationPreview={onTogglePresentationPreview}
       />
       <div className={`figure-surface figure-surface-${mode}`}>
+        <div className="figure-meta">
         <div className="figure-summary" data-export-ignore="true" aria-live="polite">
           <span>{sets.length} 个集合</span>
           <span>{analysis.unionCount} 个唯一成员</span>
           <span>{analysis.regions.filter((region) => region.count > 0).length} 个非空交集</span>
           {isAnalyzing ? <span className="analysis-status">正在计算最新输入…</span> : null}
 
+        </div>
+        {mode === 'upset' && !isAnalyzing ? <div className="upset-scope" data-export-ignore="true">
+          <span aria-live="polite">当前显示 {Math.min(topN, intersectionCount)}/{intersectionCount} 个非空交集{topN < intersectionCount ? '，其余交集未在图中展示。' : '，已全部展示。'}</span>
+          <button type="button" disabled={!intersectionCount} onClick={() => {
+            onClearSelection(); resultsRef.current?.showAll();
+          }}>查看全部交集</button>
+        </div> : null}
         </div>
         <div
           className="figure-stage"
@@ -197,6 +210,7 @@ export const FigurePanel = forwardRef<SVGSVGElement, FigurePanelProps>(function 
         </div>
       </div>
       <IntersectionResults
+        ref={resultsRef}
         sets={sets}
         analysis={analysis}
         region={selectedRegion}

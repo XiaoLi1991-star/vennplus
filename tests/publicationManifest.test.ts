@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cloneExample, DEFAULT_EXAMPLE } from '../src/data/examples';
+import { cloneExample, EXAMPLES } from '../src/data/examples';
 import { DEFAULT_FIGURE_STYLE } from '../src/data/figureStyle';
 import { DEFAULT_PALETTE } from '../src/data/palettes';
 import { DEFAULT_PUBLICATION_SETTINGS } from '../src/data/publication';
@@ -9,7 +9,7 @@ import type { WorkspaceState } from '../src/types';
 
 describe('publication manifest', () => {
   it('records reproducible data and settings hashes without a preflight payload', async () => {
-    const sets = cloneExample(DEFAULT_EXAMPLE);
+    const sets = cloneExample(EXAMPLES.find((example) => example.id === 'four-biomarkers')!);
     const state: WorkspaceState = {
       projectTitle: 'Manifest test',
       sets,

@@ -5,13 +5,14 @@ import {
   PanelRight,
 } from 'lucide-react';
 import type { ViewMode } from '../types';
-import type { ReactNode } from 'react';
-import { ModeToolbar } from './ModeToolbar';
+import { useId, type ReactNode } from 'react';
+import { ModeGuidance, ModeToolbar } from './ModeToolbar';
 
 interface PublicationToolbarProps {
   zoomControls?: ReactNode;
   mode: ViewMode;
   setCount: number;
+  modeNotice?: string;
   inputCollapsed: boolean;
   inspectorCollapsed: boolean;
   isPresentationPreview: boolean;
@@ -25,6 +26,7 @@ export function PublicationToolbar({
   zoomControls,
   mode,
   setCount,
+  modeNotice,
   inputCollapsed,
   inspectorCollapsed,
   isPresentationPreview,
@@ -33,9 +35,11 @@ export function PublicationToolbar({
   onToggleInspector,
   onTogglePresentationPreview,
 }: PublicationToolbarProps) {
+  const guidanceId = useId();
   return (
+    <div className="mode-guidance-block">
     <div className="publication-toolbar" aria-label="图形工具栏">
-      <ModeToolbar mode={mode} setCount={setCount} onModeChange={onModeChange} />
+      <ModeToolbar mode={mode} setCount={setCount} onModeChange={onModeChange} descriptionId={guidanceId} />
       <div className="canvas-tools">
       {zoomControls}
       <div className="workspace-rail-actions" data-export-ignore="true">
@@ -70,6 +74,8 @@ export function PublicationToolbar({
         {isPresentationPreview ? '退出预览' : '专注预览'}
       </button>
       </div>
+    </div>
+    <ModeGuidance id={guidanceId} mode={mode} setCount={setCount} modeNotice={modeNotice} />
     </div>
   );
 }

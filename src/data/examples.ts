@@ -119,21 +119,21 @@ const sixSetRegions = sixSetGenes.reduce<Record<number, string[]>>((accumulator,
 export const EXAMPLES: readonly ExampleDefinition[] = [
   {
     id: 'two-cohorts',
-    name: '2组：队列比较',
+    name: '2组 · Venn · 队列比较',
     description: '经典两集合 Venn',
     sets: setsFromRegions(['Discovery', 'Validation'], twoSetRegions),
     defaultMode: 'venn',
   },
   {
     id: 'three-treatments',
-    name: '3组：处理比较',
+    name: '3组 · Venn · 入门示例',
     description: '经典三集合 Venn',
     sets: setsFromRegions(['Control', 'Treatment A', 'Treatment B'], threeSetRegions),
     defaultMode: 'venn',
   },
   {
     id: 'three-proportional-euler',
-    name: '3组：Euler 比例示例',
+    name: '3组 · Euler · 面积比例示例',
     description: '集合面积随组大小变化',
     sets: setsFromRegions(
       ['Discovery', 'Validation', 'Curated'],
@@ -143,7 +143,7 @@ export const EXAMPLES: readonly ExampleDefinition[] = [
   },
   {
     id: 'four-biomarkers',
-    name: '4组：经典交集示例',
+    name: '4组 · Venn · 经典交集',
     description: '对称四椭圆 Venn',
     sets: setsFromRegions(
       ['Control', 'Treatment A', 'Treatment B', 'Validation'],
@@ -153,7 +153,7 @@ export const EXAMPLES: readonly ExampleDefinition[] = [
   },
   {
     id: 'five-pathways',
-    name: '5组：通路交叉验证',
+    name: '5组 · Venn / UpSet · 通路比较',
     description: 'venn 参考五组布局，正文建议双栏',
     sets: setsFromRegions(
       ['Luminal', 'Receptor', 'MAPK', 'DNA repair', 'TGF-beta'],
@@ -163,7 +163,7 @@ export const EXAMPLES: readonly ExampleDefinition[] = [
   },
   {
     id: 'six-cohorts',
-    name: '6组：多队列整合',
+    name: '6组 · 仅 UpSet · 多队列整合',
     description: '六组默认 UpSet',
     sets: setsFromRegions(
       ['Control', 'Treatment A', 'Treatment B', 'Cohort 2', 'Validation', 'External'],
@@ -173,7 +173,7 @@ export const EXAMPLES: readonly ExampleDefinition[] = [
   },
 ] as const;
 
-export const DEFAULT_EXAMPLE = EXAMPLES.find((example) => example.id === 'four-biomarkers')!;
+export const DEFAULT_EXAMPLE = EXAMPLES.find((example) => example.id === 'three-treatments')!;
 
 export function cloneExample(example: ExampleDefinition): SetDefinition[] {
   return example.sets.map((set, index) => ({ ...set, id: `set-${index + 1}-${Date.now()}` }));
