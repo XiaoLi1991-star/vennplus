@@ -4,6 +4,8 @@ import { EulerChart } from '../src/components/EulerChart';
 import { EXAMPLES } from '../src/data/examples';
 import { DEFAULT_FIGURE_STYLE } from '../src/data/figureStyle';
 import { analyzeSets } from '../src/lib/sets';
+import { serializeFigureSvg } from '../src/lib/download';
+import { DEFAULT_PUBLICATION_SETTINGS } from '../src/data/publication';
 import type { SetDefinition } from '../src/types';
 
 const sets: SetDefinition[] = [
@@ -153,16 +155,25 @@ describe('Euler circle area encoding', () => {
     });
   });
 
-  it('preserves every non-empty four-set value when circle topology cannot separate all regions', () => {
+  it('removes Euler footnotes and side annotations without changing the complete intersection data', () => {
     const example = EXAMPLES.find((item) => item.id === 'four-biomarkers')!;
     const { container } = renderEuler(example.sets.map((set) => ({ ...set })));
     const chart = container.querySelector('.euler-figure');
 
-    expect(chart).toHaveAttribute('data-region-label-count', '15');
+    expect(chart).toHaveAttribute('data-region-label-count', '13');
     expect(chart).toHaveAttribute('data-spatial-region-label-count', '13');
-    expect(chart).toHaveAttribute('data-separate-region-label-count', '2');
-    expect(chart).toHaveAttribute('data-omitted-region-label-count', '0');
-    expect(container.querySelectorAll('.euler-separate-region-labels [role="button"]')).toHaveLength(2);
+    expect(chart).toHaveAttribute('data-separate-region-label-count', '0');
+    expect(chart).toHaveAttribute('data-omitted-region-label-count', '2');
+    expect(container.querySelector('.euler-separate-region-labels')).toBeNull();
+    expect(container.querySelector('[data-euler-fit]')).toBeNull();
+    expect(container.querySelectorAll('.euler-set-labels [data-set-label-text]')).toHaveLength(4);
+    expect(analyzeSets(example.sets).regions).toHaveLength(15);
+    expect(analyzeSets(example.sets).regionByMask.get(3)?.count).toBe(3);
+    expect(analyzeSets(example.sets).regionByMask.get(12)?.count).toBe(3);
+    const { markup } = serializeFigureSvg(chart as SVGSVGElement, DEFAULT_PUBLICATION_SETTINGS);
+    expect(markup).not.toContain('Area fit:');
+    expect(markup).not.toContain('EXACT INTERSECTIONS');
+    expect(markup).not.toContain('euler-separate-region-labels');
   });
 
   it('offers a dedicated example with visibly unequal Euler circle areas', () => {

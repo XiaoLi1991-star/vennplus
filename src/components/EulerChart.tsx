@@ -18,7 +18,6 @@ import {
   clampSetLabelPosition,
   createAdaptiveSetLabelLayout,
   createOutsideCircleLabelPoints,
-  estimateSvgTextWidth,
   findExactCircleRegionAnchors,
 } from '../lib/labelLayout';
 import { fitViewBoxToAspectRatio } from '../lib/viewBox';
@@ -174,39 +173,12 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
   const spatialRegionLabels = regionLabelItems.filter(
     ({ item }) => sets.length < 4 || exactRegionAnchors.has(item.data.mask),
   );
-  const separateRegionLabels = regionLabelItems.filter(
-    ({ item }) => sets.length === 4 && !exactRegionAnchors.has(item.data.mask),
-  );
-  const separateLabelFontSize = Math.min(setNameFontSize * 0.82, regionFontSize);
-  const separateLabelGap = separateLabelFontSize * 2.75;
-  const separateLabelKeys = separateRegionLabels.map(
-    ({ item }) => analysis.regionByMask.get(item.data.mask)?.key ?? item.data.sets.join(' ∩ '),
-  );
-  const separateKeyLines = separateLabelKeys.map((key) => {
-    const parts = key.split(' ∩ ');
-    if (parts.length < 2) return [key];
-    const splitAt = Math.ceil(parts.length / 2);
-    return [
-      `${parts.slice(0, splitAt).join(' ∩ ')} ∩`,
-      parts.slice(splitAt).join(' ∩ '),
-    ];
-  });
-  const separateValues = separateRegionLabels.map(({ lines }) => lines.join(' · '));
-  const separateValueWidth = Math.max(
-    0,
-    ...separateValues.map((value) => estimateSvgTextWidth(value, regionFontSize, 0)),
-  );
-  const separateListWidth = 118;
-  const separateListX = 720 - separateListWidth - 7;
-  const separateKeyWidth = separateListWidth - separateValueWidth - regionFontSize * 0.8;
-  const separateListHeight = separateLabelFontSize * 1.7 + separateRegionLabels.length * separateLabelGap;
-  const separateListY = center.y - separateListHeight / 2;
-  const contentViewBox: [number, number, number, number] = [baseContentViewBox[0], baseContentViewBox[1], baseContentViewBox[2], baseContentViewBox[3] + 26];
   const figureViewBox = fitViewBoxToAspectRatio(
-    contentViewBox,
-    targetAspectRatio ?? contentViewBox[2] / contentViewBox[3],
+    baseContentViewBox,
+    targetAspectRatio ?? baseContentViewBox[2] / baseContentViewBox[3],
   );
-  const renderedRegionLabelCount = spatialRegionLabels.length + separateRegionLabels.length;
+  // Non-spatial exact regions remain available in the complete results table.
+  const renderedRegionLabelCount = spatialRegionLabels.length;
 
   return (
     <svg
@@ -219,7 +191,7 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
       data-max-region-error={fit.maxRegionError}
       data-region-label-count={renderedRegionLabelCount}
       data-spatial-region-label-count={spatialRegionLabels.length}
-      data-separate-region-label-count={separateRegionLabels.length}
+      data-separate-region-label-count={0}
       data-omitted-region-label-count={regionLabelItems.length - renderedRegionLabelCount}
     >
       <title id="euler-title">{sets.length} 组 Euler 图</title>
@@ -232,10 +204,6 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
         height={figureViewBox[3]}
         fill="#ffffff"
       />
-      <text x={360} y={baseContentViewBox[1] + baseContentViewBox[3] + 15} textAnchor="middle" fontSize={10}
-        fill={fit.maxRegionError > 0.01 ? '#995620' : '#69777e'} data-euler-fit="true">
-        {`Area fit: max region error ${(fit.maxRegionError * 100).toFixed(2)}% of union${fit.maxRegionError > 0.01 ? ' — use counts / UpSet for exact comparison' : ''}`}
-      </text>
 
       {selectedSpatialPath ? (
         <defs data-export-ignore="true">
@@ -348,116 +316,6 @@ export const EulerChart = forwardRef<SVGSVGElement, EulerChartProps>(function Eu
           );
         })}
       </g>
-
-      {separateRegionLabels.length > 0 ? (
-        <g className="euler-separate-region-labels">
-          <title>
-            These exact intersections cannot be separated by the fitted circle topology and are shown alongside the diagram.
-          </title>
-          <line
-            x1={separateListX - regionFontSize * 0.85}
-            x2={separateListX - regionFontSize * 0.85}
-            y1={separateListY}
-            y2={separateListY + separateListHeight}
-            stroke="#c7d0d4"
-            strokeWidth={1}
-            vectorEffect="non-scaling-stroke"
-          />
-          <text
-            x={separateListX}
-            y={separateListY + separateLabelFontSize}
-            fill="#69777e"
-            fontFamily="Inter, system-ui, sans-serif"
-            fontSize={separateLabelFontSize * 0.86}
-            fontWeight={650}
-            letterSpacing="0.025em"
-          >
-            EXACT INTERSECTIONS
-          </text>
-          {separateRegionLabels.map(({ item, lines }, index) => {
-            const key = separateLabelKeys[index];
-            const keyLines = separateKeyLines[index];
-            const longestKeyLineWidth = Math.max(
-              ...keyLines.map((line) => estimateSvgTextWidth(line, separateLabelFontSize, 0)),
-            );
-            const keyFontSize = Math.max(
-              separateLabelFontSize * 0.68,
-              Math.min(
-                separateLabelFontSize,
-                separateLabelFontSize * (separateKeyWidth / longestKeyLineWidth),
-              ),
-            );
-            const y = separateListY + separateLabelFontSize * 2.35 + index * separateLabelGap;
-            const regionKey = analysis.regionByMask.get(item.data.mask)?.key ?? key;
-            const isSelected = item.data.mask === activeSelectedMask;
-            return (
-              <g
-                key={`separate-${item.data.mask}`}
-                data-region-interaction="true"
-                role="button"
-                tabIndex={0}
-                aria-label={`${regionKey}，${item.data.exactSize} 个成员`}
-                aria-pressed={isSelected}
-                className={
-                  isSelected ? 'region-is-selected' : activeSelectedMask ? 'region-is-muted' : undefined
-                }
-                onClick={() => onSelectRegion(item.data.mask)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    onSelectRegion(item.data.mask);
-                  }
-                }}
-              >
-                <rect
-                  data-export-ignore="true"
-                  x={separateListX - separateLabelFontSize * 0.35}
-                  y={y - separateLabelFontSize * 0.85}
-                  width={separateListWidth}
-                  height={separateLabelGap}
-                  fill="transparent"
-                />
-                <text
-                  x={separateListX}
-                  y={y - keyFontSize * 0.45}
-                  fill="#4f5d64"
-                  fontFamily="Inter, system-ui, sans-serif"
-                  fontSize={keyFontSize}
-                  fontWeight={500}
-                >
-                  {keyLines.map((line, lineIndex) => (
-                    <tspan
-                      key={`${line}-${lineIndex}`}
-                      x={separateListX}
-                      dy={lineIndex === 0 ? 0 : keyFontSize * 1.22}
-                    >
-                      {line}
-                    </tspan>
-                  ))}
-                </text>
-                <text
-                  className="euler-separate-region-value"
-                  x={separateListX + separateListWidth}
-                  y={y + keyFontSize * 0.77}
-                  textAnchor="end"
-                  dominantBaseline="middle"
-                  fill="#30383c"
-                  fontFamily="Inter, system-ui, sans-serif"
-                  fontSize={regionFontSize}
-                  fontWeight={figureStyle.regionLabelsBold ? 700 : 400}
-                  style={{ fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {lines.map((line, lineIndex) => (
-                    <tspan key={`${line}-${lineIndex}`}>
-                      {lineIndex === 0 ? '' : ' · '}{line}
-                    </tspan>
-                  ))}
-                </text>
-              </g>
-            );
-          })}
-        </g>
-      ) : null}
 
       {display.showSetNames ? (
         <g className="euler-set-labels">

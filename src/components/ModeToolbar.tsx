@@ -51,6 +51,6 @@ export function ModeGuidance({ mode, setCount, id, modeNotice }: {
       本工具 Venn 支持 2–{MAX_VENN_SET_COUNT} 组，Euler 支持 2–{MAX_EULER_SET_COUNT} 组。
       {setCount > MAX_VENN_SET_COUNT ? '当前组数仅支持 UpSet。' : setCount === MAX_VENN_SET_COUNT ? '五组 Venn 可用但较拥挤，建议双栏尺寸或改用 UpSet。Euler 不可用。' : null}
     </p>
-    {mode === 'euler' ? <p>Euler 圆形面积为近似拟合，图下列出最大区域误差。精确比较请以交集数值为准，也可切换 UpSet。</p> : mode === 'venn' ? <p>Venn 展示集合交叠关系，区域面积不代表成员数量。</p> : null}
+    {mode === 'euler' ? <p>Euler 圆形面积为近似拟合，部分精确交集无法由圆形区域表达，可在“全部交集”查看完整数据。精确比较请以交集数值为准，也可切换 UpSet。</p> : mode === 'venn' ? <p>Venn 展示集合交叠关系，区域面积不代表成员数量。</p> : null}
   </div>;
 }
